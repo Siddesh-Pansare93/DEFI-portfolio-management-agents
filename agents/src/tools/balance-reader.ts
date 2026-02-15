@@ -36,9 +36,11 @@ const provider = new ethers.JsonRpcProvider(config.sepoliaRpcUrl);
  */
 export async function getEthBalance(walletAddress: string): Promise<number> {
   return retry(async () => {
-    console.log(`📊 Fetching ETH balance for ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`);
+    // Normalize address to proper checksum format
+    const normalizedAddress = ethers.getAddress(walletAddress.toLowerCase());
+    console.log(`📊 Fetching ETH balance for ${normalizedAddress.slice(0, 6)}...${normalizedAddress.slice(-4)}`);
 
-    const balance = await provider.getBalance(walletAddress);
+    const balance = await provider.getBalance(normalizedAddress);
     const balanceInEth = parseFloat(ethers.formatEther(balance));
 
     console.log(`✅ ETH Balance: ${balanceInEth} ETH`);
@@ -64,14 +66,17 @@ export async function getErc20Balance(
   tokenAddress: string
 ): Promise<number> {
   return retry(async () => {
-    console.log(`📊 Fetching ERC20 balance for ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`);
+    // Normalize addresses to proper checksum format
+    const normalizedWallet = ethers.getAddress(walletAddress.toLowerCase());
+    const normalizedToken = ethers.getAddress(tokenAddress.toLowerCase());
+    console.log(`📊 Fetching ERC20 balance for ${normalizedWallet.slice(0, 6)}...${normalizedWallet.slice(-4)}`);
 
     // Create contract instance
-    const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+    const contract = new ethers.Contract(normalizedToken, ERC20_ABI, provider);
 
     // Fetch balance and decimals in parallel for efficiency
     const [balance, decimals, symbol] = await Promise.all([
-      contract.balanceOf(walletAddress),
+      contract.balanceOf(normalizedWallet),
       contract.decimals(),
       contract.symbol().catch(() => 'UNKNOWN') // Symbol might fail for some tokens
     ]);
@@ -127,7 +132,9 @@ export async function getTokenMetadata(tokenAddress: string): Promise<{
   decimals: number;
 }> {
   return retry(async () => {
-    const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+    // Normalize address to proper checksum format
+    const normalizedToken = ethers.getAddress(tokenAddress.toLowerCase());
+    const contract = new ethers.Contract(normalizedToken, ERC20_ABI, provider);
 
     const [name, symbol, decimals] = await Promise.all([
       contract.name().catch(() => 'Unknown Token'),

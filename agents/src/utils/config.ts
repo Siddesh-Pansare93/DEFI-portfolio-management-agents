@@ -55,6 +55,7 @@ export const config = {
 
   // ============== External API Configuration ==============
   coingeckoApiUrl: process.env.COINGECKO_API_URL!,
+  coingeckoApiKey: process.env.COINGECKO_API_KEY || '', // Optional - CoinGecko demo API key
   theGraphUrl: 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3-sepolia',
 
   // ============== Server Configuration ==============

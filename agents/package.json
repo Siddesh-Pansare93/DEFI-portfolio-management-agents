@@ -8,6 +8,7 @@
 		"build": "tsc",
 		"start": "node dist/index.js",
 		"test:workflow": "tsx src/test-workflow.ts",
+		"test:all": "tsx src/test-all.ts",
 		"type-check": "tsc --noEmit"
 	},
 	"dependencies": {

@@ -47,11 +47,18 @@ export async function getTokenPrice(tokenSymbol: string): Promise<number> {
   return retry(async () => {
     console.log(`🌐 Fetching price for ${normalizedSymbol} from CoinGecko...`);
 
+    const params: any = {
+      ids: normalizedSymbol,
+      vs_currencies: 'usd'
+    };
+
+    // Add API key if available
+    if (config.coingeckoApiKey) {
+      params.x_cg_demo_api_key = config.coingeckoApiKey;
+    }
+
     const response = await axios.get(`${config.coingeckoApiUrl}/simple/price`, {
-      params: {
-        ids: normalizedSymbol,
-        vs_currencies: 'usd'
-      },
+      params,
       timeout: 10000 // 10 second timeout
     });
 
@@ -92,14 +99,21 @@ export async function getPriceHistory(
   return retry(async () => {
     console.log(`📈 Fetching ${days}-day price history for ${normalizedSymbol}...`);
 
+    const params: any = {
+      vs_currency: 'usd',
+      days: days,
+      interval: days <= 1 ? 'hourly' : 'daily'
+    };
+
+    // Add API key if available
+    if (config.coingeckoApiKey) {
+      params.x_cg_demo_api_key = config.coingeckoApiKey;
+    }
+
     const response = await axios.get(
       `${config.coingeckoApiUrl}/coins/${normalizedSymbol}/market_chart`,
       {
-        params: {
-          vs_currency: 'usd',
-          days: days,
-          interval: days <= 1 ? 'hourly' : 'daily'
-        },
+        params,
         timeout: 15000 // 15 second timeout for historical data
       }
     );
@@ -140,11 +154,18 @@ export async function getMultipleTokenPrices(
   return retry(async () => {
     console.log(`🌐 Fetching prices for ${normalizedSymbols.length} tokens...`);
 
+    const params: any = {
+      ids: normalizedSymbols.join(','),
+      vs_currencies: 'usd'
+    };
+
+    // Add API key if available
+    if (config.coingeckoApiKey) {
+      params.x_cg_demo_api_key = config.coingeckoApiKey;
+    }
+
     const response = await axios.get(`${config.coingeckoApiUrl}/simple/price`, {
-      params: {
-        ids: normalizedSymbols.join(','),
-        vs_currencies: 'usd'
-      },
+      params,
       timeout: 10000
     });
 
