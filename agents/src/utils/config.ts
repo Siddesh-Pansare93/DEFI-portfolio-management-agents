@@ -56,7 +56,10 @@ export const config = {
   // ============== External API Configuration ==============
   coingeckoApiUrl: process.env.COINGECKO_API_URL!,
   coingeckoApiKey: process.env.COINGECKO_API_KEY || '', // Optional - CoinGecko demo API key
-  theGraphUrl: 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3-sepolia',
+  theGraphApiKey: process.env.THE_GRAPH_API_KEY || '', // Optional - The Graph API key
+  theGraphUrl: process.env.THE_GRAPH_API_KEY
+    ? `https://gateway.thegraph.com/api/${process.env.THE_GRAPH_API_KEY}/subgraphs/id/EDJCBpDBGBajTP1x3qLGLg3ZaVR5Q2TkNxyNHdCuryex`
+    : 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3-sepolia', // Fallback to old endpoint (will use mock data)
 
   // ============== Server Configuration ==============
   port: parseInt(process.env.PORT || '3001', 10),

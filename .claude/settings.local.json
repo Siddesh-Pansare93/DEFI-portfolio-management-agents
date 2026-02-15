@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npm run type-check:*)",
       "Bash(npm run test:all:*)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:thegraph.com)"
     ]
   }
 }
