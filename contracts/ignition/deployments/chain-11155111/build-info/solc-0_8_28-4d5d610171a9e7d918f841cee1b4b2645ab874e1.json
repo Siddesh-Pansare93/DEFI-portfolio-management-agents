@@ -1,0 +1,39 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-4d5d610171a9e7d918f841cee1b4b2645ab874e1",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "userSourceNameMap": {
+    "contracts/RebalanceLogger.sol": "project/contracts/RebalanceLogger.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/RebalanceLogger.sol": {
+        "content": "\r\n// SPDX-License-Identifier: MIT\r\npragma solidity ^0.8.28;\r\n\r\n/**\r\n * @title RebalanceLogger\r\n * @notice Logs AI agent portfolio recommendations on-chain for transparency\r\n * @dev Non-custodial: This contract does NOT hold user funds\r\n */\r\ncontract RebalanceLogger {\r\n    \r\n    // Struct to store each recommendation\r\n    struct Recommendation {\r\n        address user;           // User's wallet address\r\n        string action;          // \"swap\", \"add_liquidity\", \"remove_liquidity\", \"hold\"\r\n        string details;         // JSON string with full recommendation details\r\n        uint256 timestamp;      // When recommendation was made\r\n        bool executed;          // Whether user executed this recommendation\r\n    }\r\n\r\n    // Storage: user address => array of their recommendations\r\n    mapping(address => Recommendation[]) public userRecommendations;\r\n\r\n    // Events for off-chain indexing\r\n    event RecommendationLogged(\r\n        address indexed user,\r\n        string action,\r\n        string details,\r\n        uint256 timestamp,\r\n        uint256 recommendationIndex\r\n    );\r\n\r\n    event RecommendationExecuted(\r\n        address indexed user,\r\n        uint256 indexed recommendationIndex,\r\n        uint256 executionTimestamp\r\n    );\r\n\r\n    /**\r\n     * @notice Log a new recommendation from the AI agent system\r\n     * @param action Type of action recommended (swap, add_liquidity, etc.)\r\n     * @param details JSON string with full recommendation details\r\n     */\r\n    function logRecommendation(\r\n        string memory action,\r\n        string memory details\r\n    ) external returns (uint256) {\r\n        Recommendation memory newRec = Recommendation({\r\n            user: msg.sender,\r\n            action: action,\r\n            details: details,\r\n            timestamp: block.timestamp,\r\n            executed: false\r\n        });\r\n\r\n        userRecommendations[msg.sender].push(newRec);\r\n        uint256 index = userRecommendations[msg.sender].length - 1;\r\n\r\n        emit RecommendationLogged(\r\n            msg.sender,\r\n            action,\r\n            details,\r\n            block.timestamp,\r\n            index\r\n        );\r\n\r\n        return index;\r\n    }\r\n\r\n    /**\r\n     * @notice Mark a recommendation as executed (user performed the action)\r\n     * @param recommendationIndex Index of the recommendation to mark\r\n     */\r\n    function markAsExecuted(uint256 recommendationIndex) external {\r\n        require(\r\n            recommendationIndex < userRecommendations[msg.sender].length,\r\n            \"Invalid recommendation index\"\r\n        );\r\n        require(\r\n            !userRecommendations[msg.sender][recommendationIndex].executed,\r\n            \"Already marked as executed\"\r\n        );\r\n\r\n        userRecommendations[msg.sender][recommendationIndex].executed = true;\r\n\r\n        emit RecommendationExecuted(\r\n            msg.sender,\r\n            recommendationIndex,\r\n            block.timestamp\r\n        );\r\n    }\r\n\r\n    /**\r\n     * @notice Get a specific recommendation for a user\r\n     * @param user User's address\r\n     * @param index Index of the recommendation\r\n     */\r\n    function getRecommendation(address user, uint256 index)\r\n        external\r\n        view\r\n        returns (Recommendation memory)\r\n    {\r\n        require(\r\n            index < userRecommendations[user].length,\r\n            \"Invalid index\"\r\n        );\r\n        return userRecommendations[user][index];\r\n    }\r\n\r\n    /**\r\n     * @notice Get total number of recommendations for a user\r\n     * @param user User's address\r\n     */\r\n    function getRecommendationCount(address user)\r\n        external\r\n        view\r\n        returns (uint256)\r\n    {\r\n        return userRecommendations[user].length;\r\n    }\r\n\r\n    /**\r\n     * @notice Get the latest recommendation for a user\r\n     * @param user User's address\r\n     */\r\n    function getLatestRecommendation(address user)\r\n        external\r\n        view\r\n        returns (Recommendation memory)\r\n    {\r\n        require(\r\n            userRecommendations[user].length > 0,\r\n            \"No recommendations found\"\r\n        );\r\n        return userRecommendations[user][userRecommendations[user].length - 1];\r\n    }\r\n\r\n    /**\r\n     * @notice Get all recommendations for a user\r\n     * @param user User's address\r\n     */\r\n    function getAllRecommendations(address user)\r\n        external\r\n        view\r\n        returns (Recommendation[] memory)\r\n    {\r\n        return userRecommendations[user];\r\n    }\r\n\r\n    /**\r\n     * @notice Get only executed recommendations for a user\r\n     * @param user User's address\r\n     */\r\n    function getExecutedRecommendations(address user)\r\n        external\r\n        view\r\n        returns (Recommendation[] memory)\r\n    {\r\n        uint256 executedCount = 0;\r\n        \r\n        // Count executed recommendations\r\n        for (uint256 i = 0; i < userRecommendations[user].length; i++) {\r\n            if (userRecommendations[user][i].executed) {\r\n                executedCount++;\r\n            }\r\n        }\r\n\r\n        // Create array of executed recommendations\r\n        Recommendation[] memory executed = new Recommendation[](executedCount);\r\n        uint256 currentIndex = 0;\r\n        \r\n        for (uint256 i = 0; i < userRecommendations[user].length; i++) {\r\n            if (userRecommendations[user][i].executed) {\r\n                executed[currentIndex] = userRecommendations[user][i];\r\n                currentIndex++;\r\n            }\r\n        }\r\n\r\n        return executed;\r\n    }\r\n}"
+      }
+    }
+  }
+}

@@ -1,14 +1,11 @@
-import hardhatToolboxViemPlugin from "@nomicfoundation/hardhat-toolbox-viem";
-import { defineConfig } from "hardhat/config";
+import { HardhatUserConfig } from "hardhat/config";
+import "@nomicfoundation/hardhat-toolbox-viem";
 import "@nomicfoundation/hardhat-verify";
 import * as dotenv from "dotenv";
 
-// Load .env file
 dotenv.config();
 
-export default defineConfig({
-  plugins: [hardhatToolboxViemPlugin],
-  
+const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.28",
     settings: {
@@ -19,14 +16,17 @@ export default defineConfig({
     },
   },
   
+  paths: {
+    sources: "./contracts",
+    tests: "./test",
+    cache: "./cache",
+    artifacts: "./artifacts",
+  },
+  
   networks: {
-    hardhatMainnet: {
+    hardhat: {
       type: "edr-simulated",
       chainType: "l1",
-    },
-    hardhatOp: {
-      type: "edr-simulated",
-      chainType: "op",
     },
     sepolia: {
       type: "http",
@@ -36,9 +36,11 @@ export default defineConfig({
     },
   },
   
-  verify: {
-    etherscan: {
-      apiKey: process.env.ETHERSCAN_API_KEY || "",
+  etherscan: {
+    apiKey: {
+      sepolia: process.env.ETHERSCAN_API_KEY || "",
     },
   },
-});
+};
+
+export default config;
