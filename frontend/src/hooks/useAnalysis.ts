@@ -73,8 +73,14 @@ export function useAnalysis() {
         } else {
           // Update partial state if available
           const partialState = data.workflowState || data.result?.workflowState;
-          if (partialState) {
-            setWorkflowState(partialState);
+          const messages = data.negotiationMessages || partialState?.negotiationMessages;
+          
+          if (partialState || messages) {
+            setWorkflowState(prev => ({
+              ...(prev || {} as WorkflowState),
+              ...(partialState || {}),
+              negotiationMessages: messages || prev?.negotiationMessages
+            }));
           }
         }
       } catch (err) {

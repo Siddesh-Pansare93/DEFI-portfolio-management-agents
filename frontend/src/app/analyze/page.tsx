@@ -5,6 +5,7 @@ import { useEffect, Suspense, useState } from "react";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { NavBar } from "@/components/layout/NavBar";
 import { AgentPipeline } from "@/components/agents/AgentPipeline";
+import { NegotiationChat } from "@/components/agents/NegotiationChat";
 import { GlowContainer } from "@/components/layout/GlowContainer";
 import { Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -163,6 +164,16 @@ function AnalyzeContent() {
         <div className="py-8">
           <AgentPipeline status={status} workflowState={workflowState} currentAgentName={currentAgentName} />
         </div>
+
+        {/* Negotiation Theater (Chat) */}
+        {status !== "pending" && (
+          <div className="w-full max-w-5xl mx-auto">
+            <NegotiationChat 
+              messages={workflowState?.negotiationMessages || []} 
+              status={status} 
+            />
+          </div>
+        )}
 
         {/* Results Section */}
         <AnimatePresence>
