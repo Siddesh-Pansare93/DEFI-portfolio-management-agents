@@ -154,10 +154,12 @@ export interface JobState {
   walletAddress: string;
   status: JobStatus;
   currentAgent: string | null;   // Name of currently executing agent
-  startTime: Date;
+  progress: number;               // 0-1, percentage of workflow completed
   state: WorkflowState;           // Current workflow state
   result: FinalRecommendation | null;
   error: string | null;
+  createdAt: Date;                // When job was created
+  completedAt: Date | null;       // When job finished (null if still running)
 }
 
 // ============================================================================

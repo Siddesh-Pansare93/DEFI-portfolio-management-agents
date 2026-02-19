@@ -38,7 +38,22 @@ export const config = {
   // ============== Smart Contract Addresses ==============
   rebalanceLoggerAddress: process.env.REBALANCE_LOGGER_ADDRESS!,
 
-  // Token addresses on Sepolia
+  // ============== Token Contract Addresses ==============
+  // Sepolia Testnet (limited token availability)
+  // For mainnet deployment, use actual mainnet addresses
+  tokenAddresses: {
+    // Available on Sepolia
+    WETH: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',
+    USDC: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+    USDT: '0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0',
+    DAI: '0xFF34B3d4Aee8ddCd6F9AFFFB6Fe49bD371b8a357',
+
+    // Not available on Sepolia - Use mainnet for these:
+    // UNI, AAVE, COMP, MKR, SNX, CRV, SUSHI, LDO, MATIC, OP, ARB, GRT, LINK, RPL
+    // WBTC, BNB, SOL, BUSD, FRAX, LUSD
+  },
+
+  // Legacy single address references (for backwards compatibility)
   wethAddress: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',
   usdcAddress: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
   usdtAddress: '0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0',
@@ -82,12 +97,42 @@ export const config = {
   cacheTimeout: 300000,           // 5 minutes cache TTL (in milliseconds)
 
   // ============== Token Symbols for CoinGecko ==============
+  // Expanded to 25 tokens for comprehensive DeFi portfolio support
   tokenSymbols: {
+    // Major Assets (5)
     ETH: 'ethereum',
+    WBTC: 'wrapped-bitcoin',
+    BTC: 'bitcoin',
+    BNB: 'binancecoin',
+    SOL: 'solana',
+
+    // Stablecoins (6)
     USDC: 'usd-coin',
     USDT: 'tether',
     DAI: 'dai',
-    WBTC: 'wrapped-bitcoin'
+    BUSD: 'binance-usd',
+    FRAX: 'frax',
+    LUSD: 'liquity-usd',
+
+    // DeFi Blue Chips (8)
+    UNI: 'uniswap',
+    AAVE: 'aave',
+    COMP: 'compound-governance-token',
+    MKR: 'maker',
+    SNX: 'havven',
+    CRV: 'curve-dao-token',
+    SUSHI: 'sushi',
+    LDO: 'lido-dao',
+
+    // Layer 2 & Scaling (3)
+    MATIC: 'matic-network',
+    OP: 'optimism',
+    ARB: 'arbitrum',
+
+    // Emerging DeFi (3)
+    GRT: 'the-graph',
+    LINK: 'chainlink',
+    RPL: 'rocket-pool'
   },
 
   // ============== Uniswap V3 Constants ==============
