@@ -32,7 +32,8 @@ function AnalyzeContent() {
   const { 
     status, 
     workflowState, 
-    error, 
+    error,
+    currentAgentName,
     startPolling 
   } = useAnalysis();
 
@@ -142,7 +143,7 @@ function AnalyzeContent() {
 
         {/* Main Pipeline Visualization */}
         <div className="py-8">
-          <AgentPipeline status={status} workflowState={workflowState} />
+          <AgentPipeline status={status} workflowState={workflowState} currentAgentName={currentAgentName} />
         </div>
 
         {/* Results Section */}
@@ -171,7 +172,7 @@ function AnalyzeContent() {
               />
 
               {/* 2. Charts Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 h-auto md:h-80">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 min-h-[350px]">
                 <PortfolioDonut data={workflowState.portfolio} />
                 <RiskGauge score={workflowState.riskValidation?.riskScore || 0} />
                 <NashBargainingViz 

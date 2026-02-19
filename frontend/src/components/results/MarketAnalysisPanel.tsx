@@ -15,49 +15,65 @@ export function MarketAnalysisPanel({ data }: MarketAnalysisPanelProps) {
 
   const { ethTrend, volatility, marketCondition, reasoning } = data;
 
-  const trendIcon = ethTrend === "bullish" ? <Sun className="w-5 h-5 text-neon-yellow" /> : <CloudRain className="w-5 h-5 text-neon-blue" />;
-  const volatilityColor = volatility > 0.5 ? "red" : volatility > 0.3 ? "orange" : "green";
+  const trendIcon = ethTrend === 'bullish' ? (
+    <Sun className="w-5 h-5 text-neon-green" />
+  ) : ethTrend === 'bearish' ? (
+    <CloudRain className="w-5 h-5 text-neon-blue" />
+  ) : (
+    <TrendingUp className="w-5 h-5 text-yellow-400" />
+  );
+
+  const volatilityColor = volatility > 50 ? "red" : volatility > 20 ? "orange" : "green";
 
   return (
-    <GlowContainer glowColor="blue" intensity="low" className="p-6 h-full flex flex-col gap-4">
-      <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-        <TrendingUp className="text-neon-blue w-5 h-5" />
-        <h3 className="font-orbitron text-lg text-white tracking-wider">Market Intelligence</h3>
+    <GlowContainer glowColor="blue" intensity="medium" className="h-full flex flex-col justify-between p-6">
+      
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-6 border-b border-neon-blue/20 pb-4">
+        <TrendingUp className="w-6 h-6 text-neon-blue" />
+        <h3 className="font-orbitron text-xl text-white tracking-wider">Market Intelligence</h3>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        {/* Trend */}
-        <div className="space-y-1">
-          <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest">ETH Trend</span>
-          <div className="flex items-center gap-2">
-            {trendIcon}
-            <span className={`text-lg font-mono font-bold uppercase ${ethTrend === 'bullish' ? 'text-neon-green' : 'text-neon-blue'}`}>
-              {ethTrend}
-            </span>
+      <div className="flex-1 space-y-6">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 gap-4">
+          
+          {/* Trend Section */}
+          <div className="space-y-2">
+            <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest block">ETH Trend</span>
+            <div className="flex items-center gap-2 bg-white/5 p-3 rounded-lg border border-white/10">
+              {trendIcon}
+              <span className={`text-base font-mono font-bold uppercase ${ethTrend === 'bullish' ? 'text-neon-green' : ethTrend === 'bearish' ? 'text-neon-blue' : 'text-yellow-400'}`}>
+                {ethTrend}
+              </span>
+            </div>
+          </div>
+
+          {/* Volatility Section */}
+          <div className="space-y-2">
+            <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest block">Volatility</span>
+            <div className="flex items-center gap-2 h-12">
+              <NeonBadge label={formatPercent(volatility)} color={volatilityColor as any} size="lg" />
+            </div>
           </div>
         </div>
 
-        {/* Volatility */}
-        <div className="space-y-1">
-          <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest">Volatility</span>
-          <div className="flex items-center gap-2">
-            <NeonBadge label={formatPercent(volatility)} color={volatilityColor as any} size="md" />
-          </div>
-        </div>
-      </div>
-
-      {/* Market Condition */}
-      <div className="space-y-2 mt-2">
-        <div className="flex items-center justify-between text-xs text-zinc-500 font-mono uppercase tracking-widest">
+        {/* Market Condition Badge */}
+        <div className="flex items-center justify-between text-xs text-zinc-500 font-mono uppercase tracking-widest pt-4 border-t border-white/5">
           <span>Market State</span>
-          <span className={`px-2 py-0.5 rounded bg-white/5 border border-white/10 ${marketCondition === 'volatile' ? 'text-red-400' : 'text-green-400'}`}>
+          <span className={`px-3 py-1 rounded-full text-xs font-bold border ${marketCondition === 'volatile' ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-green-500/10 text-green-400 border-green-500/30'}`}>
             {marketCondition.toUpperCase()}
           </span>
         </div>
-        <p className="text-sm text-zinc-300 italic border-l-2 border-neon-blue/30 pl-3 leading-relaxed">
+      </div>
+
+      {/* Reasoning Footer */}
+      <div className="mt-6 pt-4 border-t border-neon-blue/20">
+        <p className="text-xs md:text-sm text-zinc-300 italic border-l-4 border-neon-blue/50 pl-4 py-2 bg-neon-blue/5 rounded-r-lg leading-relaxed font-mono">
           "{reasoning}"
         </p>
       </div>
+
     </GlowContainer>
   );
 }

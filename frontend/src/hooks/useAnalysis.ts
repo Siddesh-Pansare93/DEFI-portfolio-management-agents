@@ -5,6 +5,7 @@ import { AGENT_DEFINITIONS, ANIMATION_DURATION_PER_AGENT } from "@/lib/constants
 export function useAnalysis() {
   const [status, setStatus] = useState<JobStatus>("pending");
   const [currentAgentIndex, setCurrentAgentIndex] = useState(-1);
+  const [currentAgentName, setCurrentAgentName] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +19,8 @@ export function useAnalysis() {
     setJobId(id);
     setStatus("analyzing");
     setError(null);
-    setCurrentAgentIndex(0); // Start visual flow
+    setCurrentAgentIndex(0);
+    setCurrentAgentName("Data Collector");
 
     // Clear existing intervals
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
@@ -40,6 +42,11 @@ export function useAnalysis() {
         
         const data = await res.json();
         
+        // Update current agent name from backend
+        if (data.currentAgent) {
+          setCurrentAgentName(data.currentAgent);
+        }
+
         if (data.status === "complete") {
           setStatus("complete");
           
@@ -86,6 +93,7 @@ export function useAnalysis() {
   return {
     status,
     currentAgentIndex,
+    currentAgentName,
     jobId,
     workflowState,
     result,

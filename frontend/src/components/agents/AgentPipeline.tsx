@@ -11,10 +11,11 @@ import { cn } from "@/lib/utils";
 interface AgentPipelineProps {
   status: JobStatus;
   workflowState: WorkflowState | null;
+  currentAgentName: string | null;
 }
 
-export function AgentPipeline({ status, workflowState }: AgentPipelineProps) {
-  const { activeAgentIndex, completedAgents } = useAgentProgress(status, workflowState);
+export function AgentPipeline({ status, workflowState, currentAgentName }: AgentPipelineProps) {
+  const { activeAgentIndex, completedAgents } = useAgentProgress(status, workflowState, currentAgentName);
 
   // Calculate overall progress based on completed agents
   const completedCount = completedAgents.filter(Boolean).length;

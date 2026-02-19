@@ -11,7 +11,7 @@ interface GlowContainerProps {
 export function GlowContainer({ 
   children, 
   className, 
-  glowColor = "cyan",
+  glowColor,
   intensity = "medium" 
 }: GlowContainerProps) {
   
@@ -30,19 +30,25 @@ export function GlowContainer({
     high: "shadow-lg animate-pulse", // subtle pulse for high intensity
   };
 
+  const borderColor = glowColor ? (glowColor === 'cyan' ? 'border-neon-cyan' : `border-neon-${glowColor}`) : 'border-white/10';
+
   return (
     <div 
       className={cn(
-        "relative rounded-xl border bg-bg-panel/80 backdrop-blur-sm p-4 transition-all duration-300",
-        glowMap[glowColor],
+        "relative rounded-xl border bg-bg-panel/80 backdrop-blur-sm p-6 transition-all duration-300 overflow-hidden",
+        glowColor ? glowMap[glowColor] : "border-white/10 shadow-none",
         intensityMap[intensity],
         className
       )}
     >
       {children}
       {/* Corner accents */}
-      <div className={`absolute -top-[1px] -left-[1px] w-4 h-4 border-t-2 border-l-2 rounded-tl-lg ${glowColor === 'cyan' ? 'border-neon-cyan' : `border-neon-${glowColor}`}`} />
-      <div className={`absolute -bottom-[1px] -right-[1px] w-4 h-4 border-b-2 border-r-2 rounded-br-lg ${glowColor === 'cyan' ? 'border-neon-cyan' : `border-neon-${glowColor}`}`} />
+      {glowColor && (
+        <>
+          <div className={`absolute -top-[1px] -left-[1px] w-4 h-4 border-t-2 border-l-2 rounded-tl-lg ${borderColor}`} />
+          <div className={`absolute -bottom-[1px] -right-[1px] w-4 h-4 border-b-2 border-r-2 rounded-br-lg ${borderColor}`} />
+        </>
+      )}
     </div>
   );
 }

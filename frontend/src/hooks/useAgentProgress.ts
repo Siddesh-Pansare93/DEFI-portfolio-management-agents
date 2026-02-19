@@ -10,7 +10,8 @@ const STEP_DURATION = 9000; // 9s per agent
 
 export function useAgentProgress(
   status: JobStatus,
-  workflowState: WorkflowState | null
+  workflowState: WorkflowState | null,
+  currentAgentName: string | null = null
 ) {
   const [activeAgentIndex, setActiveAgentIndex] = useState(-1);
   const [completedAgents, setCompletedAgents] = useState<boolean[]>(
@@ -28,7 +29,22 @@ export function useAgentProgress(
       setActiveAgentIndex(AGENT_DEFINITIONS.length);
       setCompletedAgents(new Array(AGENT_DEFINITIONS.length).fill(true));
     } else if (status === "analyzing") {
-      // Check real completion based on data presence in workflowState
+      // Priority 1: Use explicit backend "currentAgent" name if available
+      if (currentAgentName) {
+        const agentIndex = AGENT_DEFINITIONS.findIndex(a => a.name === currentAgentName);
+        if (agentIndex !== -1) {
+          setActiveAgentIndex(agentIndex);
+          // Mark all previous agents as complete
+          const newCompleted = new Array(AGENT_DEFINITIONS.length).fill(false);
+          for (let i = 0; i < agentIndex; i++) {
+            newCompleted[i] = true;
+          }
+          setCompletedAgents(newCompleted);
+          return; // Skip other checks if we have explicit agent name
+        }
+      }
+
+      // Priority 2: Check real completion based on data presence in workflowState
       const realCompletion = AGENT_DEFINITIONS.map((agent) =>
         agent.completionCheck(workflowState)
       );
@@ -64,7 +80,7 @@ export function useAgentProgress(
     }
 
     return () => clearInterval(timer);
-  }, [status, workflowState]); 
+  }, [status, workflowState, currentAgentName]); 
 
   return { activeAgentIndex, completedAgents };
 }
