@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
+import { WalletConnect } from "@/components/wallet/WalletConnect";
+
 export function NavBar() {
   const [isBackendHealthy, setIsBackendHealthy] = useState<boolean>(false);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
@@ -61,8 +63,12 @@ export function NavBar() {
           
           <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
              <span>NETWORK: SEPOLIA</span>
-             <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+             <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_#a855f7]" />
           </div>
+          
+          <div className="h-4 w-[1px] bg-white/10" />
+
+          <WalletConnect />
         </div>
       </div>
     </nav>
