@@ -10,7 +10,8 @@
       "WebFetch(domain:docs.langchain.com)",
       "WebFetch(domain:medium.com)",
       "WebFetch(domain:latenode.com)",
-      "WebFetch(domain:api-docs.defillama.com)"
+      "WebFetch(domain:api-docs.defillama.com)",
+      "Bash(npx tsc --noEmit)"
     ]
   }
 }

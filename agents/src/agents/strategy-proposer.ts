@@ -1,134 +1,115 @@
-import { WorkflowState, StrategyProposal, AddLiquidityDetails } from '../types';
+import { WorkflowState, StrategyProposal, AddLiquidityDetails, NegotiationMessage, UserPreferences } from '../types';
 import { calculateOptimalRange, estimateUniswapAPY } from '../tools/analysis';
+import { config } from '../utils/config';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 
 // ============================================================================
-// STRATEGY PROPOSER AGENT
+// STRATEGY PROPOSER AGENT (Gemini LLM + Round-Aware Negotiation)
 // ============================================================================
+
+const DEFAULT_PREFERENCES: UserPreferences = {
+  maxImpermanentLoss: 10,
+  maxPositionSize: 70,
+  riskAppetite: 'moderate',
+  preferredActions: ['add_liquidity', 'swap', 'hold']
+};
 
 /**
  * Strategy Proposer Agent
  *
- * Purpose: Propose specific portfolio strategies based on portfolio and market data
+ * Purpose: Propose or refine portfolio strategies using Gemini LLM
  *
- * Tools Used:
- * - calculateOptimalRange: Calculate price range for Uniswap V3
- * - estimateUniswapAPY: Estimate yield from liquidity provision
- *
- * Strategy Options:
- * - add_liquidity: Add funds to Uniswap V3 ETH-USDC pool
- * - swap: Exchange tokens to rebalance
- * - hold: Maintain current allocation
- *
- * Output: Detailed strategy proposal with expected returns and reasoning
+ * Round 1: Propose optimal strategy based on market analysis
+ * Round 2+: Refine based on Risk Validator's critique
  */
 export async function runStrategyProposer(state: WorkflowState): Promise<WorkflowState> {
+  const round = (state.negotiationRound || 0) + 1;
+
   console.log('\n💡 ========================================');
-  console.log('💡 AGENT 3: STRATEGY PROPOSER AGENT');
+  console.log(`💡 AGENT 3: STRATEGY PROPOSER (Round ${round})`);
   console.log('💡 ========================================\n');
 
   try {
-    // Validate required state
-    if (!state.portfolio) {
-      throw new Error('Portfolio data required for strategy proposal');
-    }
-    if (!state.marketAnalysis) {
-      throw new Error('Market analysis required for strategy proposal');
-    }
+    if (!state.portfolio) throw new Error('Portfolio data required for strategy proposal');
+    if (!state.marketAnalysis) throw new Error('Market analysis required for strategy proposal');
 
-    const { portfolio, marketAnalysis } = state;
+    const { portfolio, marketAnalysis, negotiationMessages } = state;
+    const prefs = state.userPreferences || DEFAULT_PREFERENCES;
 
     // ========================================================================
-    // STEP 1: Analyze current situation
+    // STEP 1: Build deterministic strategy as base
     // ========================================================================
 
-    console.log('🔍 Analyzing portfolio and market conditions...\n');
-
-    const totalValue = portfolio.totalValueUSD;
-    const ethAllocation = portfolio.allocationPercent.ETH;
-
-    console.log(`📊 Current Allocation:`);
-    console.log(`   ETH: ${ethAllocation.toFixed(1)}%`);
-    console.log(`   USDC: ${portfolio.allocationPercent.USDC.toFixed(1)}%\n`);
-
-    console.log(`📈 Market Conditions:`);
-    console.log(`   Trend: ${marketAnalysis.ethTrend}`);
-    console.log(`   Volatility: ${marketAnalysis.volatility.toFixed(2)}%`);
-    console.log(`   Market Recommendation: ${marketAnalysis.recommendation}\n`);
+    const deterministicStrategy = buildDeterministicStrategy(state, prefs);
 
     // ========================================================================
-    // STEP 2: Decide on strategy based on conditions
+    // STEP 2: Try Gemini for enhanced reasoning
     // ========================================================================
 
     let strategyProposal: StrategyProposal;
 
-    // Check if portfolio has sufficient funds
-    const minPortfolioValue = 100; // Minimum $100 to be worth strategies
-    if (totalValue < minPortfolioValue) {
-      // HOLD strategy - portfolio too small
-      strategyProposal = {
-        action: 'hold',
-        details: null,
-        expectedAPY: 0,
-        expectedReturn1Year: 0,
-        reasoning: `Portfolio value ($${totalValue.toFixed(2)}) is below minimum threshold ($${minPortfolioValue}). Accumulate more capital before implementing active strategies. Focus on acquiring more ETH or USDC.`
-      };
-    } else if (marketAnalysis.recommendation === 'increase_eth' && ethAllocation < 70) {
-      // ADD LIQUIDITY strategy - bullish market, good for LP
-      strategyProposal = await proposeAddLiquidity(state);
-    } else if (marketAnalysis.recommendation === 'decrease_eth' && ethAllocation > 30) {
-      // SWAP strategy - bearish market, reduce ETH exposure
-      strategyProposal = proposeSwapToStable(state);
-    } else if (ethAllocation >= 40 && ethAllocation <= 60) {
-      // ADD LIQUIDITY - balanced portfolio, good for LP
-      strategyProposal = await proposeAddLiquidity(state);
-    } else {
-      // HOLD strategy - wait for better conditions
-      strategyProposal = {
-        action: 'hold',
-        details: null,
-        expectedAPY: 0,
-        expectedReturn1Year: 0,
-        reasoning: `Current allocation (${ethAllocation.toFixed(1)}% ETH) is ${ethAllocation > 60 ? 'heavily weighted toward ETH' : 'heavily weighted toward USDC'}. Market conditions (${marketAnalysis.ethTrend}, ${marketAnalysis.volatility.toFixed(1)}% volatility) suggest maintaining current position. Consider rebalancing when market stabilizes.`
-      };
+    try {
+      const geminiResult = await proposeWithGemini(
+        state,
+        prefs,
+        round,
+        deterministicStrategy,
+        negotiationMessages || []
+      );
+      strategyProposal = geminiResult;
+      console.log(`✅ Gemini strategy proposal (Round ${round}) complete\n`);
+    } catch (err) {
+      console.warn('⚠️  Gemini strategy failed, using deterministic fallback:', (err as Error).message);
+      strategyProposal = deterministicStrategy;
     }
 
+    strategyProposal.version = round;
+
     // ========================================================================
-    // STEP 3: Log strategy proposal
+    // STEP 3: Log negotiation message
     // ========================================================================
 
-    console.log('\n✅ STRATEGY PROPOSAL:');
+    const msgType = round === 1 ? 'proposal' : 'refinement';
+    const negotiationMessage: NegotiationMessage = {
+      round,
+      from: 'StrategyProposer',
+      type: msgType,
+      content: strategyProposal.geminiReasoning || strategyProposal.reasoning,
+      proposalRef: `v${round}`,
+      keyPoints: extractKeyPoints(strategyProposal),
+      timestamp: new Date()
+    };
+
+    // ========================================================================
+    // STEP 4: Log results
+    // ========================================================================
+
+    console.log('✅ STRATEGY PROPOSAL:');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`🎯 Action: ${strategyProposal.action.toUpperCase().replace('_', ' ')}`);
-
+    console.log(`🎯 Action: ${strategyProposal.action.toUpperCase().replace('_', ' ')} (v${round})`);
     if (strategyProposal.action === 'add_liquidity' && strategyProposal.details) {
-      const details = strategyProposal.details as AddLiquidityDetails;
-      console.log(`\n💰 Liquidity Details:`);
-      console.log(`   Pool: ${details.pool}`);
-      console.log(`   ETH Amount: ${details.ethAmount.toFixed(4)} ETH`);
-      console.log(`   USDC Amount: ${details.usdcAmount.toFixed(2)} USDC`);
-      console.log(`   Price Range: $${details.priceRangeLower.toFixed(2)} - $${details.priceRangeUpper.toFixed(2)}`);
-    } else if (strategyProposal.action === 'swap' && strategyProposal.details) {
-      const details = strategyProposal.details as any;
-      console.log(`\n💱 Swap Details:`);
-      console.log(`   From: ${details.amount.toFixed(4)} ${details.fromToken}`);
-      console.log(`   To: ${details.toToken}`);
+      const d = strategyProposal.details as AddLiquidityDetails;
+      console.log(`   ETH: ${d.ethAmount.toFixed(4)} | USDC: ${d.usdcAmount.toFixed(2)}`);
+      console.log(`   Range: $${d.priceRangeLower.toFixed(2)} - $${d.priceRangeUpper.toFixed(2)}`);
     }
-
-    console.log(`\n📊 Expected Returns:`);
-    console.log(`   APY: ${(strategyProposal.expectedAPY * 100).toFixed(2)}%`);
-    console.log(`   1-Year Return: $${strategyProposal.expectedReturn1Year.toFixed(2)}`);
-
-    console.log(`\n💡 Reasoning:`);
-    console.log(`   ${strategyProposal.reasoning}`);
+    console.log(`   Expected APY: ${(strategyProposal.expectedAPY * 100).toFixed(2)}%`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     // ========================================================================
-    // STEP 4: Return updated state
+    // STEP 5: Return updated state
     // ========================================================================
+
+    const allProposals = [...(state.strategyProposals || []), strategyProposal];
+    const allMessages = [...(state.negotiationMessages || []), negotiationMessage];
 
     return {
       ...state,
-      strategyProposal
+      strategyProposal,
+      currentProposal: strategyProposal,
+      strategyProposals: allProposals,
+      negotiationRound: round,
+      negotiationMessages: allMessages
     };
 
   } catch (error) {
@@ -138,97 +119,223 @@ export async function runStrategyProposer(state: WorkflowState): Promise<Workflo
 }
 
 // ============================================================================
-// HELPER FUNCTIONS FOR STRATEGY GENERATION
+// GEMINI STRATEGY GENERATION
 // ============================================================================
 
-/**
- * Propose adding liquidity to Uniswap V3 pool
- */
-async function proposeAddLiquidity(state: WorkflowState): Promise<StrategyProposal> {
-  const { portfolio, marketAnalysis } = state;
+async function proposeWithGemini(
+  state: WorkflowState,
+  prefs: UserPreferences,
+  round: number,
+  deterministicStrategy: StrategyProposal,
+  prevMessages: NegotiationMessage[]
+): Promise<StrategyProposal> {
+  const llm = new ChatGoogleGenerativeAI({
+    model: config.geminiModel,
+    apiKey: config.googleApiKey,
+    temperature: 0.4,
+  });
 
-  if (!portfolio || !marketAnalysis) {
-    throw new Error('Portfolio and market analysis required');
+  const { portfolio, marketAnalysis } = state;
+  if (!portfolio || !marketAnalysis) throw new Error('State incomplete');
+
+  const topHoldings = portfolio.topHoldings || ['ETH'];
+  const topHoldingsText = topHoldings.map(s =>
+    `${s}: $${portfolio.holdings[s]?.valueUSD?.toFixed(2) || '0'}`
+  ).join(', ');
+
+  let systemPrompt: string;
+  let userPrompt: string;
+
+  if (round === 1) {
+    systemPrompt = `You are an expert DeFi portfolio manager. Propose ONE specific, optimal strategy with exact numbers. Be confident and thorough. Always output valid JSON matching the specified schema.`;
+
+    userPrompt = `Portfolio: $${portfolio.totalValueUSD.toFixed(2)} total
+Top holdings: ${topHoldingsText}
+ETH balance: ${portfolio.holdings['ETH']?.balance?.toFixed(4) || '0'} ETH
+USDC balance: ${portfolio.holdings['USDC']?.balance?.toFixed(2) || '0'} USDC
+
+Market Analysis:
+- ETH trend: ${marketAnalysis.ethTrend} (${marketAnalysis.ethPriceChange30d.toFixed(1)}% 30d)
+- RSI: ${marketAnalysis.technicalIndicators.rsi.toFixed(1)}
+- Technical signal: ${marketAnalysis.technicalIndicators.signal}
+- Fear & Greed: ${marketAnalysis.fearGreedIndex} (${marketAnalysis.fearGreedLabel})
+- Volatility: ${marketAnalysis.volatility.toFixed(1)}%
+
+User Preferences:
+- Max Impermanent Loss: ${prefs.maxImpermanentLoss}%
+- Max Position Size: ${prefs.maxPositionSize}%
+- Risk Appetite: ${prefs.riskAppetite}
+
+ETH current price: $${portfolio.holdings['ETH']?.priceUSD?.toFixed(2) || '2000'}
+
+Propose ONE strategy. Output ONLY valid JSON (no markdown, no explanation outside JSON):
+{
+  "action": "add_liquidity" | "swap" | "hold",
+  "details": {
+    "pool": "ETH-USDC",
+    "ethAmount": <number>,
+    "usdcAmount": <number>,
+    "priceRangeLower": <number>,
+    "priceRangeUpper": <number>
+  } | null,
+  "expectedAPY": <decimal 0-1>,
+  "expectedReturn1Year": <number in USD>,
+  "reasoning": "<3-5 sentence explanation citing specific data>"
+}`;
+
+  } else {
+    const lastCritique = [...prevMessages].reverse().find(m => m.from === 'RiskValidator');
+    const prevProposal = state.strategyProposals?.[state.strategyProposals.length - 1];
+
+    const roundTone = round <= 3 ? 'Acknowledge concerns and make targeted adjustments.'
+      : round <= 6 ? 'Make genuine concessions. Find common ground.'
+      : round <= 9 ? 'Near-agreement. Fine-tune only the flagged issues.'
+      : 'Propose the most conservative acceptable option. We must reach agreement.';
+
+    systemPrompt = `You are refining a DeFi strategy after risk feedback. ${roundTone} Always output valid JSON.`;
+
+    userPrompt = `Round ${round} of up to 10.
+
+Previous proposal (v${round - 1}):
+- Action: ${prevProposal?.action || 'unknown'}
+- Expected APY: ${((prevProposal?.expectedAPY || 0) * 100).toFixed(2)}%
+
+Risk Validator's critique:
+${lastCritique?.content || 'No specific critique available.'}
+
+Key concerns: ${lastCritique?.keyPoints.join(' | ') || 'None'}
+
+User preferences: Max IL ${prefs.maxImpermanentLoss}%, Max Position ${prefs.maxPositionSize}%, Appetite: ${prefs.riskAppetite}
+ETH price: $${portfolio.holdings['ETH']?.priceUSD?.toFixed(2) || '2000'}
+ETH balance: ${portfolio.holdings['ETH']?.balance?.toFixed(4) || '0'}
+USDC balance: ${portfolio.holdings['USDC']?.balance?.toFixed(2) || '0'}
+
+Address EACH concern. Output ONLY valid JSON:
+{
+  "action": "add_liquidity" | "swap" | "hold",
+  "details": {
+    "pool": "ETH-USDC",
+    "ethAmount": <number>,
+    "usdcAmount": <number>,
+    "priceRangeLower": <number>,
+    "priceRangeUpper": <number>
+  } | null,
+  "expectedAPY": <decimal 0-1>,
+  "expectedReturn1Year": <number in USD>,
+  "reasoning": "<explain how you addressed each concern with specific numbers>"
+}`;
   }
 
-  const ethBalance = portfolio.holdings.ETH.balance;
-  const usdcBalance = portfolio.holdings.USDC.balance;
-  const ethPrice = portfolio.holdings.ETH.priceUSD;
+  const response = await llm.invoke([
+    new SystemMessage(systemPrompt),
+    new HumanMessage(userPrompt)
+  ]);
+
+  const content = typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
+
+  // Parse JSON from response
+  try {
+    // Strip markdown code blocks if present
+    const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+
+    return {
+      action: parsed.action || deterministicStrategy.action,
+      details: parsed.details || deterministicStrategy.details,
+      expectedAPY: typeof parsed.expectedAPY === 'number' ? parsed.expectedAPY : deterministicStrategy.expectedAPY,
+      expectedReturn1Year: typeof parsed.expectedReturn1Year === 'number' ? parsed.expectedReturn1Year : deterministicStrategy.expectedReturn1Year,
+      reasoning: parsed.reasoning || deterministicStrategy.reasoning,
+      geminiReasoning: content,
+      version: round
+    };
+  } catch {
+    console.warn('⚠️  Could not parse Gemini JSON, merging with deterministic');
+    return {
+      ...deterministicStrategy,
+      geminiReasoning: content,
+      version: round
+    };
+  }
+}
+
+// ============================================================================
+// DETERMINISTIC STRATEGY (FALLBACK)
+// ============================================================================
+
+function buildDeterministicStrategy(state: WorkflowState, prefs: UserPreferences): StrategyProposal {
+  const { portfolio, marketAnalysis } = state;
+  if (!portfolio || !marketAnalysis) {
+    return { action: 'hold', details: null, expectedAPY: 0, expectedReturn1Year: 0, reasoning: 'Insufficient data.', version: 1 };
+  }
+
   const totalValue = portfolio.totalValueUSD;
+  const ethAllocation = portfolio.allocationPercent['ETH'] || 0;
+  const ethBalance = portfolio.holdings['ETH']?.balance || 0;
+  const usdcBalance = portfolio.holdings['USDC']?.balance || 0;
+  const ethPrice = portfolio.holdings['ETH']?.priceUSD || 2000;
 
-  // Allocate 50% of portfolio to LP position (balanced approach)
-  const lpAllocationPercent = 0.5;
-  const lpValueUSD = totalValue * lpAllocationPercent;
+  if (totalValue < 100) {
+    return {
+      action: 'hold', details: null, expectedAPY: 0, expectedReturn1Year: 0,
+      reasoning: `Portfolio ($${totalValue.toFixed(2)}) too small for active strategies.`, version: 1
+    };
+  }
 
-  // Calculate token amounts for 50/50 split
-  const ethValueInLP = lpValueUSD / 2;
-  const usdcValueInLP = lpValueUSD / 2;
+  const canAddLiquidity = marketAnalysis.recommendation !== 'decrease_eth'
+    || marketAnalysis.technicalIndicators.signal.includes('buy');
 
-  const ethAmount = Math.min(ethValueInLP / ethPrice, ethBalance * 0.8); // Max 80% of ETH
-  const usdcAmount = Math.min(usdcValueInLP, usdcBalance * 0.8); // Max 80% of USDC
+  if (canAddLiquidity && ethBalance > 0.001 && usdcBalance > 10) {
+    const lpValue = totalValue * Math.min(0.5, prefs.maxPositionSize / 100);
+    const ethAmount = Math.min((lpValue / 2) / ethPrice, ethBalance * 0.8);
+    const usdcAmount = Math.min(lpValue / 2, usdcBalance * 0.8);
 
-  // Calculate optimal price range based on volatility
-  const range = calculateOptimalRange(ethPrice, marketAnalysis.volatility, 1.5);
+    const range = calculateOptimalRange(ethPrice, marketAnalysis.volatility, 1.5);
+    const poolFeesDaily = portfolio.uniswapPool.feeAPR * portfolio.uniswapPool.liquidity / 365;
+    const positionSize = ethAmount * ethPrice + usdcAmount;
+    const estimatedAPY = estimateUniswapAPY(poolFeesDaily, portfolio.uniswapPool.liquidity, positionSize) / 100;
 
-  // Estimate APY from pool fees
-  const poolFeesDaily = portfolio.uniswapPool.feeAPR * portfolio.uniswapPool.liquidity / 365;
-  const positionSize = (ethAmount * ethPrice) + usdcAmount;
-  const estimatedAPY = estimateUniswapAPY(poolFeesDaily, portfolio.uniswapPool.liquidity, positionSize) / 100;
+    return {
+      action: 'add_liquidity',
+      details: { pool: 'ETH-USDC', ethAmount, usdcAmount, priceRangeLower: range.lowerPrice, priceRangeUpper: range.upperPrice },
+      expectedAPY: estimatedAPY,
+      expectedReturn1Year: positionSize * estimatedAPY,
+      reasoning: `Market shows ${marketAnalysis.ethTrend} trend (${marketAnalysis.ethPriceChange30d.toFixed(1)}% 30d). Proposing LP position within ${prefs.maxPositionSize}% position limit.`,
+      version: 1
+    };
+  }
 
-  const expectedReturn1Year = positionSize * estimatedAPY;
+  if (marketAnalysis.recommendation === 'decrease_eth' && ethAllocation > 30) {
+    const targetAlloc = 0.4;
+    const targetEthValue = totalValue * targetAlloc;
+    const currentEthValue = ethBalance * ethPrice;
+    const swapAmount = Math.min((currentEthValue - targetEthValue) / ethPrice, ethBalance * 0.3);
 
-  const details: AddLiquidityDetails = {
-    pool: 'ETH-USDC',
-    ethAmount,
-    usdcAmount,
-    priceRangeLower: range.lowerPrice,
-    priceRangeUpper: range.upperPrice
-  };
-
-  const reasoning = `Based on ${marketAnalysis.ethTrend} market trend and ${marketAnalysis.volatility.toFixed(1)}% volatility, providing liquidity to Uniswap V3 ETH-USDC pool offers attractive yields. The pool currently has $${portfolio.uniswapPool.liquidity.toLocaleString()} in liquidity with ${(portfolio.uniswapPool.feeAPR * 100).toFixed(2)}% fee APR. The proposed position uses ${((positionSize / totalValue) * 100).toFixed(1)}% of your portfolio in a balanced 50/50 ETH-USDC split, with a price range of $${range.lowerPrice.toFixed(2)}-$${range.upperPrice.toFixed(2)} to capture fee earnings while managing volatility risk.`;
+    return {
+      action: 'swap',
+      details: { fromToken: 'ETH', toToken: 'USDC', amount: Math.max(0, swapAmount) },
+      expectedAPY: 0, expectedReturn1Year: 0,
+      reasoning: `Bearish signal (${marketAnalysis.ethTrend}). Reducing ETH from ${ethAllocation.toFixed(1)}% to ~40% for downside protection.`,
+      version: 1
+    };
+  }
 
   return {
-    action: 'add_liquidity',
-    details,
-    expectedAPY: estimatedAPY,
-    expectedReturn1Year,
-    reasoning
+    action: 'hold', details: null, expectedAPY: 0, expectedReturn1Year: 0,
+    reasoning: `Conditions don't clearly favor action. ${marketAnalysis.ethTrend} trend with ${marketAnalysis.volatility.toFixed(1)}% volatility. Maintaining current allocation.`,
+    version: 1
   };
 }
 
-/**
- * Propose swapping ETH to USDC (reduce ETH exposure)
- */
-function proposeSwapToStable(state: WorkflowState): StrategyProposal {
-  const { portfolio, marketAnalysis } = state;
-
-  if (!portfolio || !marketAnalysis) {
-    throw new Error('Portfolio and market analysis required');
+function extractKeyPoints(proposal: StrategyProposal): string[] {
+  const points: string[] = [];
+  points.push(`Action: ${proposal.action.replace('_', ' ').toUpperCase()}`);
+  if (proposal.expectedAPY > 0) {
+    points.push(`Expected APY: ${(proposal.expectedAPY * 100).toFixed(2)}%`);
   }
-
-  const ethBalance = portfolio.holdings.ETH.balance;
-  const ethPrice = portfolio.holdings.ETH.priceUSD;
-  const ethAllocation = portfolio.allocationPercent.ETH;
-
-  // Swap to reach 40% ETH allocation (defensive)
-  const targetAllocation = 0.4;
-  const currentEthValue = ethBalance * ethPrice;
-  const targetEthValue = portfolio.totalValueUSD * targetAllocation;
-  const swapAmount = Math.min((currentEthValue - targetEthValue) / ethPrice, ethBalance * 0.3); // Max 30% swap
-
-  const details = {
-    fromToken: 'ETH',
-    toToken: 'USDC',
-    amount: swapAmount
-  };
-
-  const reasoning = `Market analysis indicates ${marketAnalysis.ethTrend} trend with ${marketAnalysis.volatility.toFixed(1)}% volatility. Current ETH allocation (${ethAllocation.toFixed(1)}%) is high for current market conditions. Swapping ${swapAmount.toFixed(4)} ETH to USDC will reduce exposure to ${targetAllocation * 100}%, providing downside protection while maintaining balanced positioning for future opportunities.`;
-
-  return {
-    action: 'swap',
-    details,
-    expectedAPY: 0,
-    expectedReturn1Year: 0,
-    reasoning
-  };
+  if (proposal.action === 'add_liquidity' && proposal.details) {
+    const d = proposal.details as AddLiquidityDetails;
+    points.push(`Range: $${d.priceRangeLower.toFixed(0)} - $${d.priceRangeUpper.toFixed(0)}`);
+    points.push(`Position: ${d.ethAmount.toFixed(4)} ETH + $${d.usdcAmount.toFixed(2)} USDC`);
+  }
+  return points;
 }

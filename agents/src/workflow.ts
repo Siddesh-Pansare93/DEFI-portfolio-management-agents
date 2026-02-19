@@ -1,5 +1,5 @@
 import { StateGraph } from '@langchain/langgraph';
-import { WorkflowState } from './types';
+import { WorkflowState, UserPreferences } from './types';
 import { runDataCollector } from './agents/data-collector';
 import { runMarketAnalyzer } from './agents/market-analyzer';
 import { runStrategyProposer } from './agents/strategy-proposer';
@@ -8,35 +8,62 @@ import { nashNegotiator } from './agents/negotiator';
 import { config } from './utils/config';
 
 // ============================================================================
-// LANGGRAPH WORKFLOW DEFINITION
+// NEGOTIATION CONSTANTS
+// ============================================================================
+
+const MAX_NEGOTIATION_ROUNDS = 10;
+
+// ============================================================================
+// CONDITIONAL ROUTING
 // ============================================================================
 
 /**
- * Create the LangGraph workflow for agent orchestration
+ * Route after RiskValidator:
+ * - Approved OR reached max rounds → go to Nash Negotiator
+ * - Not approved AND under max rounds → loop back to Strategy Proposer
+ */
+function routeAfterRiskValidation(state: WorkflowState): string {
+  const { riskValidation, negotiationRound } = state;
+
+  if (riskValidation?.approved) {
+    console.log(`\n✅ Risk Validator APPROVED → proceeding to Negotiator\n`);
+    return 'negotiator';
+  }
+
+  if ((negotiationRound || 0) >= MAX_NEGOTIATION_ROUNDS) {
+    console.log(`\n⏱️  Max rounds (${MAX_NEGOTIATION_ROUNDS}) reached → forcing final decision\n`);
+    return 'negotiator';
+  }
+
+  console.log(`\n🔄 Round ${negotiationRound} rejected → Strategy Proposer refines...\n`);
+  return 'strategyProposer';
+}
+
+// ============================================================================
+// WORKFLOW CREATION
+// ============================================================================
+
+/**
+ * Create the LangGraph workflow with 10-round negotiation loop
  *
- * Workflow Flow:
+ * Flow:
  * START → Data Collector → Market Analyzer → Strategy Proposer
- *   → Risk Validator → Nash Negotiator → END
- *
- * State Management:
- * - State flows through each agent sequentially
- * - Each agent reads from state and adds its output
- * - State accumulates data at each step
- *
- * @returns Compiled LangGraph workflow
+ *   → Risk Validator → [if approved OR round 10] → Negotiator → END
+ *                  ↑ [if rejected and round < 10] ↓
+ *                  └──────── Strategy Proposer ←──┘
  */
 export function createWorkflow() {
-  console.log('🔧 Creating LangGraph workflow...\n');
-
-  // ========================================================================
-  // STEP 1: Initialize StateGraph with WorkflowState type
-  // ========================================================================
+  console.log('🔧 Creating LangGraph workflow with 10-round negotiation...\n');
 
   const workflow = new StateGraph<WorkflowState>({
     channels: {
       walletAddress: {
         value: (left?: string, right?: string) => right ?? left ?? '',
         default: () => ''
+      },
+      userPreferences: {
+        value: (left?: any, right?: any) => right ?? left ?? null,
+        default: () => null
       },
       portfolio: {
         value: (left?: any, right?: any) => right ?? left ?? null,
@@ -46,13 +73,33 @@ export function createWorkflow() {
         value: (left?: any, right?: any) => right ?? left ?? null,
         default: () => null
       },
+      deepMarketAnalysis: {
+        value: (left?: any, right?: any) => right ?? left ?? null,
+        default: () => null
+      },
       strategyProposal: {
         value: (left?: any, right?: any) => right ?? left ?? null,
         default: () => null
       },
+      currentProposal: {
+        value: (left?: any, right?: any) => right ?? left ?? null,
+        default: () => null
+      },
+      strategyProposals: {
+        value: (left?: any[], right?: any[]) => right ?? left ?? [],
+        default: () => []
+      },
       riskValidation: {
         value: (left?: any, right?: any) => right ?? left ?? null,
         default: () => null
+      },
+      negotiationRound: {
+        value: (left?: number, right?: number) => right ?? left ?? 0,
+        default: () => 0
+      },
+      negotiationMessages: {
+        value: (left?: any[], right?: any[]) => right ?? left ?? [],
+        default: () => []
       },
       finalRecommendation: {
         value: (left?: any, right?: any) => right ?? left ?? null,
@@ -61,174 +108,118 @@ export function createWorkflow() {
     }
   });
 
-  // ========================================================================
-  // STEP 2: Add agent nodes to the workflow
-  // ========================================================================
-
-  // Node 1: Data Collection Agent
+  // Add agent nodes
   workflow.addNode('dataCollector', runDataCollector);
-
-  // Node 2: Market Analyzer Agent
   workflow.addNode('marketAnalyzer', runMarketAnalyzer);
-
-  // Node 3: Strategy Proposer Agent
   workflow.addNode('strategyProposer', runStrategyProposer);
-
-  // Node 4: Risk Validator Agent
   workflow.addNode('riskValidator', runRiskValidator);
-
-  // Node 5: Nash Negotiator (Deterministic)
   workflow.addNode('negotiator', nashNegotiator);
 
-  // ========================================================================
-  // STEP 3: Define edges (sequential execution flow)
-  // ========================================================================
-
-  // Start → Data Collector
+  // Sequential edges: start → data → market → strategy
   (workflow as any).addEdge('__start__', 'dataCollector');
-
-  // Data Collector → Market Analyzer
   (workflow as any).addEdge('dataCollector', 'marketAnalyzer');
-
-  // Market Analyzer → Strategy Proposer
   (workflow as any).addEdge('marketAnalyzer', 'strategyProposer');
-
-  // Strategy Proposer → Risk Validator
   (workflow as any).addEdge('strategyProposer', 'riskValidator');
 
-  // Risk Validator → Negotiator
-  (workflow as any).addEdge('riskValidator', 'negotiator');
+  // Conditional edge: riskValidator → (negotiator | strategyProposer)
+  workflow.addConditionalEdges(
+    'riskValidator',
+    routeAfterRiskValidation,
+    {
+      'negotiator': 'negotiator',
+      'strategyProposer': 'strategyProposer'
+    }
+  );
 
-  // Negotiator → End
+  // Negotiator → end
   (workflow as any).addEdge('negotiator', '__end__');
-
-  // ========================================================================
-  // STEP 4: Compile the workflow
-  // ========================================================================
 
   const compiledWorkflow = workflow.compile();
 
   console.log('✅ Workflow created successfully');
-  console.log('📊 Agents: Data Collector → Market Analyzer → Strategy Proposer → Risk Validator → Negotiator\n');
+  console.log('📊 Flow: Data Collector → Market Analyzer → Strategy Proposer ⇄ Risk Validator (up to 10 rounds) → Nash Negotiator\n');
 
   return compiledWorkflow;
 }
 
 // ============================================================================
-// WORKFLOW EXECUTION FUNCTION
+// WORKFLOW EXECUTION
 // ============================================================================
 
 /**
- * Execute the complete agent workflow for a wallet address
+ * Execute the complete agent workflow
  *
- * @param walletAddress - Ethereum wallet address to analyze
+ * @param walletAddress - Ethereum wallet address
+ * @param userPreferences - Optional user risk preferences
  * @returns Final workflow state with recommendation
- *
- * Features:
- * - Sequential agent execution
- * - State accumulation at each step
- * - Timeout protection (2 minutes)
- * - Error handling and logging
- *
- * @example
- * const result = await executeWorkflow('0x1234...');
- * console.log('Recommendation:', result.finalRecommendation);
  */
-export async function executeWorkflow(walletAddress: string): Promise<WorkflowState> {
+export async function executeWorkflow(
+  walletAddress: string,
+  userPreferences?: Partial<UserPreferences>
+): Promise<WorkflowState> {
   console.log('\n' + '═'.repeat(80));
   console.log('🚀 AUTONOMOUS DEFI AGENT WORKFLOW EXECUTION');
   console.log('═'.repeat(80));
-  console.log(`📍 Wallet Address: ${walletAddress}`);
-  console.log(`⏰ Started at: ${new Date().toLocaleTimeString()}`);
+  console.log(`📍 Wallet: ${walletAddress}`);
+  console.log(`⏰ Started: ${new Date().toLocaleTimeString()}`);
   console.log('═'.repeat(80) + '\n');
 
   try {
-    // ========================================================================
-    // STEP 1: Create the workflow
-    // ========================================================================
-
     const workflow = createWorkflow();
 
-    // ========================================================================
-    // STEP 2: Prepare initial state
-    // ========================================================================
+    const defaultPrefs: UserPreferences = {
+      maxImpermanentLoss: 10,
+      maxPositionSize: 70,
+      riskAppetite: 'moderate',
+      preferredActions: ['add_liquidity', 'swap', 'hold']
+    };
 
     const initialState: WorkflowState = {
       walletAddress,
+      userPreferences: userPreferences
+        ? { ...defaultPrefs, ...userPreferences }
+        : defaultPrefs,
       portfolio: null,
       marketAnalysis: null,
+      deepMarketAnalysis: null,
       strategyProposal: null,
+      currentProposal: null,
+      strategyProposals: [],
       riskValidation: null,
+      negotiationRound: 0,
+      negotiationMessages: [],
       finalRecommendation: null
     };
 
-    console.log('📝 Initial State:');
-    console.log(`   Wallet: ${walletAddress}`);
-    console.log(`   Portfolio: null`);
-    console.log(`   Market Analysis: null`);
-    console.log(`   Strategy: null`);
-    console.log(`   Risk Validation: null`);
-    console.log(`   Final Recommendation: null\n`);
-
-    // ========================================================================
-    // STEP 3: Execute workflow with timeout protection
-    // ========================================================================
-
-    console.log('⏳ Executing workflow with timeout protection...\n');
-
+    // Execute with timeout protection
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => {
-        reject(new Error(`Workflow timeout: Execution exceeded ${config.workflowTimeout / 1000} seconds`));
+        reject(new Error(`Workflow timeout: Exceeded ${config.workflowTimeout / 1000}s`));
       }, config.workflowTimeout);
     });
 
     const workflowPromise = workflow.invoke(initialState as any);
-
-    // Race between workflow execution and timeout
-    const finalState = await Promise.race([
-      workflowPromise,
-      timeoutPromise
-    ]) as unknown as WorkflowState;
-
-    // ========================================================================
-    // STEP 4: Validate final state
-    // ========================================================================
+    const finalState = await Promise.race([workflowPromise, timeoutPromise]) as unknown as WorkflowState;
 
     if (!finalState.finalRecommendation) {
-      throw new Error('Workflow completed but no final recommendation was generated');
+      throw new Error('Workflow completed but no final recommendation generated');
     }
 
-    // ========================================================================
-    // STEP 5: Log completion summary
-    // ========================================================================
-
+    const rounds = finalState.negotiationRound || 1;
     console.log('\n' + '═'.repeat(80));
-    console.log('✅ WORKFLOW EXECUTION COMPLETE');
+    console.log('✅ WORKFLOW COMPLETE');
     console.log('═'.repeat(80));
-    console.log(`⏰ Completed at: ${new Date().toLocaleTimeString()}`);
-    console.log(`\n📊 Final State Summary:`);
-    console.log(`   ✅ Portfolio: ${finalState.portfolio ? 'COLLECTED' : 'MISSING'}`);
-    console.log(`   ✅ Market Analysis: ${finalState.marketAnalysis ? 'COMPLETE' : 'MISSING'}`);
-    console.log(`   ✅ Strategy: ${finalState.strategyProposal ? 'PROPOSED' : 'MISSING'}`);
-    console.log(`   ✅ Risk Validation: ${finalState.riskValidation ? 'VALIDATED' : 'MISSING'}`);
-    console.log(`   ✅ Final Recommendation: ${finalState.finalRecommendation ? 'GENERATED' : 'MISSING'}`);
-    console.log('\n🎯 FINAL RECOMMENDATION:');
-    console.log(`   Action: ${finalState.finalRecommendation.action.toUpperCase().replace('_', ' ')}`);
-    console.log(`   Expected APY: ${(finalState.finalRecommendation.expectedAPY * 100).toFixed(2)}%`);
-    console.log(`   Max Risk: ${finalState.finalRecommendation.maxRisk.toFixed(2)}%`);
-    console.log(`   Confidence: ${(finalState.finalRecommendation.confidence * 100).toFixed(0)}%`);
+    console.log(`⏰ Completed: ${new Date().toLocaleTimeString()}`);
+    console.log(`🔄 Negotiation rounds: ${rounds}`);
+    console.log(`🎯 Action: ${finalState.finalRecommendation.action.toUpperCase()}`);
+    console.log(`📊 APY: ${(finalState.finalRecommendation.expectedAPY * 100).toFixed(2)}%`);
+    console.log(`💯 Confidence: ${(finalState.finalRecommendation.confidence * 100).toFixed(0)}%`);
     console.log('═'.repeat(80) + '\n');
 
     return finalState;
 
   } catch (error) {
-    console.error('\n' + '═'.repeat(80));
-    console.error('❌ WORKFLOW EXECUTION FAILED');
-    console.error('═'.repeat(80));
-    console.error(`⏰ Failed at: ${new Date().toLocaleTimeString()}`);
-    console.error(`❌ Error: ${(error as Error).message}`);
-    console.error('═'.repeat(80) + '\n');
-
+    console.error('❌ WORKFLOW FAILED:', (error as Error).message);
     throw error;
   }
 }
@@ -237,17 +228,7 @@ export async function executeWorkflow(walletAddress: string): Promise<WorkflowSt
 // UTILITY FUNCTIONS
 // ============================================================================
 
-/**
- * Get workflow execution statistics
- *
- * @param state - Final workflow state
- * @returns Execution statistics
- */
-export function getWorkflowStats(state: WorkflowState): {
-  stepsCompleted: number;
-  totalSteps: number;
-  completionRate: number;
-} {
+export function getWorkflowStats(state: WorkflowState) {
   const steps = [
     state.portfolio !== null,
     state.marketAnalysis !== null,
@@ -255,44 +236,18 @@ export function getWorkflowStats(state: WorkflowState): {
     state.riskValidation !== null,
     state.finalRecommendation !== null
   ];
-
   const stepsCompleted = steps.filter(Boolean).length;
-  const totalSteps = 5;
-  const completionRate = stepsCompleted / totalSteps;
-
-  return {
-    stepsCompleted,
-    totalSteps,
-    completionRate
-  };
+  return { stepsCompleted, totalSteps: 5, completionRate: stepsCompleted / 5 };
 }
 
-/**
- * Check if workflow completed successfully
- *
- * @param state - Workflow state to check
- * @returns true if all steps completed
- */
 export function isWorkflowComplete(state: WorkflowState): boolean {
-  return !!(
-    state.portfolio &&
-    state.marketAnalysis &&
-    state.strategyProposal &&
-    state.riskValidation &&
-    state.finalRecommendation
-  );
+  return !!(state.portfolio && state.marketAnalysis && state.strategyProposal && state.riskValidation && state.finalRecommendation);
 }
 
-/**
- * Get current workflow step name
- *
- * @param state - Current workflow state
- * @returns Name of the current/last completed step
- */
 export function getCurrentStep(state: WorkflowState): string {
   if (state.finalRecommendation) return 'Negotiator (Complete)';
-  if (state.riskValidation) return 'Risk Validator';
-  if (state.strategyProposal) return 'Strategy Proposer';
+  if (state.riskValidation) return `Risk Validator (Round ${state.negotiationRound || 1})`;
+  if (state.strategyProposal) return `Strategy Proposer (Round ${state.negotiationRound || 1})`;
   if (state.marketAnalysis) return 'Market Analyzer';
   if (state.portfolio) return 'Data Collector';
   return 'Not Started';

@@ -37,7 +37,7 @@ export function useAnalysis() {
     // Backend Polling
     pollIntervalRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`http://localhost:3001/api/status/${id}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/status/${id}`);
         if (!res.ok) throw new Error("Status check failed");
         
         const data = await res.json();

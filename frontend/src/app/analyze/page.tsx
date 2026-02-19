@@ -56,10 +56,10 @@ function AnalyzeContent() {
     writeContract({
       address: REBALANCE_LOGGER_ADDRESS as `0x${string}`,
       abi: REBALANCE_LOGGER_ABI,
-      functionName: "logRebalance",
+      functionName: "logRecommendation",
       args: [
         workflowState.finalRecommendation.action,
-        BigInt(0),
+        JSON.stringify(workflowState.finalRecommendation.details || {})
       ],
     }, {
       onError: (err) => {

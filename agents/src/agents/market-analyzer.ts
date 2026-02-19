@@ -1,27 +1,29 @@
-import { WorkflowState, MarketAnalysis } from '../types';
+import { WorkflowState, DeepMarketAnalysis } from '../types';
 import { getPriceHistory, getAveragePrice } from '../tools/price-fetcher';
 import { calculateVolatility } from '../tools/analysis';
+import { getCryptoNews, calculateNewsSentiment } from '../tools/news-fetcher';
+import { getFearGreedIndex } from '../tools/fear-greed';
+import { getUniswapTVL } from '../tools/defi-llama';
+import { performFullTechnicalAnalysis } from '../tools/technical-analysis';
 import { config } from '../utils/config';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 
 // ============================================================================
-// MARKET ANALYZER AGENT
+// MARKET ANALYZER AGENT (Gemini LLM + Deterministic Fallback)
 // ============================================================================
 
 /**
  * Market Analyzer Agent
  *
- * Purpose: Analyze market conditions and trends for ETH
+ * Purpose: Comprehensive market analysis using:
+ * - 30-day price history + technical indicators (RSI, MACD, Bollinger Bands)
+ * - News sentiment from NewsAPI
+ * - Fear & Greed Index
+ * - Uniswap TVL from DeFiLlama
+ * - Gemini LLM for synthesis and reasoning
  *
- * Tools Used:
- * - getPriceHistory: Fetch 30-day price history from CoinGecko
- * - calculateVolatility: Calculate annualized volatility
- *
- * Analysis:
- * - Trend: bullish (>5% above 30d avg), bearish (<5% below), or neutral
- * - Volatility: stable (<15%), volatile (>35%), or uncertain
- * - Recommendation: increase_eth, decrease_eth, or maintain
- *
- * Output: Market analysis with trend, volatility, and reasoning
+ * Output: DeepMarketAnalysis with all indicators + LLM reasoning
  */
 export async function runMarketAnalyzer(state: WorkflowState): Promise<WorkflowState> {
   console.log('\n📈 ========================================');
@@ -29,136 +31,267 @@ export async function runMarketAnalyzer(state: WorkflowState): Promise<WorkflowS
   console.log('📈 ========================================\n');
 
   try {
-    // Validate that portfolio data exists
     if (!state.portfolio) {
       throw new Error('Portfolio data required for market analysis');
     }
 
-    const currentEthPrice = state.portfolio.holdings.ETH.priceUSD;
-
     // ========================================================================
-    // STEP 1: Fetch 30-day price history
+    // STEP 1: Fetch all data in parallel
     // ========================================================================
 
-    console.log('📊 Fetching 30-day ETH price history...\n');
+    console.log('📊 Gathering market data...\n');
 
-    const priceHistory = await getPriceHistory(config.tokenSymbols.ETH, 30);
+    const dominantToken = state.portfolio.dominantToken || 'ETH';
+    const topHoldings = state.portfolio.topHoldings || ['ETH'];
 
-    if (priceHistory.length < 2) {
-      throw new Error('Insufficient price history for analysis');
-    }
+    const [
+      ethPriceHistory,
+      fearGreed,
+      uniswapTVL,
+      newsItems
+    ] = await Promise.all([
+      getPriceHistory(config.tokenSymbols.ETH, 30),
+      getFearGreedIndex(),
+      getUniswapTVL(),
+      getCryptoNews(`${dominantToken} ethereum DeFi cryptocurrency`, 10)
+    ]);
 
     // ========================================================================
     // STEP 2: Calculate metrics
     // ========================================================================
 
-    // Calculate average price over 30 days
-    const avgPrice = getAveragePrice(priceHistory);
+    const ethPrices = ethPriceHistory.map(p => p.price);
+    const currentEthPrice = state.portfolio.holdings['ETH']?.priceUSD
+      || ethPrices[ethPrices.length - 1]
+      || 0;
 
-    // Calculate price change percentage
-    const priceChangePercent = ((currentEthPrice - avgPrice) / avgPrice) * 100;
+    const avgPrice = getAveragePrice(ethPriceHistory);
+    const priceChangePercent = avgPrice > 0 ? ((currentEthPrice - avgPrice) / avgPrice) * 100 : 0;
+    const volatility = calculateVolatility(ethPriceHistory);
+    const technicalAnalysis = performFullTechnicalAnalysis(ethPrices);
+    const sentimentScore = calculateNewsSentiment(newsItems);
 
-    // Calculate volatility
-    const volatility = calculateVolatility(priceHistory);
-
-    console.log(`📊 Price Metrics:`);
-    console.log(`   Current Price: $${currentEthPrice.toFixed(2)}`);
-    console.log(`   30-day Average: $${avgPrice.toFixed(2)}`);
-    console.log(`   Price Change: ${priceChangePercent > 0 ? '+' : ''}${priceChangePercent.toFixed(2)}%`);
-    console.log(`   Volatility: ${volatility.toFixed(2)}%\n`);
+    console.log(`📊 Price: $${currentEthPrice.toFixed(2)} | 30d change: ${priceChangePercent.toFixed(2)}%`);
+    console.log(`📊 Volatility: ${volatility.toFixed(2)}% | RSI: ${technicalAnalysis.rsi.toFixed(1)}`);
+    console.log(`📊 Fear & Greed: ${fearGreed.value} (${fearGreed.label})`);
+    console.log(`📊 Uniswap TVL: $${(uniswapTVL.total / 1e9).toFixed(2)}B`);
+    console.log(`📊 News Sentiment: ${sentimentScore.toFixed(2)}\n`);
 
     // ========================================================================
-    // STEP 3: Determine trend
+    // STEP 3: Try Gemini analysis
     // ========================================================================
 
-    let ethTrend: 'bullish' | 'bearish' | 'neutral';
+    let geminiReasoning = '';
+    let marketAnalysis: DeepMarketAnalysis;
 
-    if (priceChangePercent > 5) {
-      ethTrend = 'bullish';
-    } else if (priceChangePercent < -5) {
-      ethTrend = 'bearish';
-    } else {
-      ethTrend = 'neutral';
+    try {
+      geminiReasoning = await analyzeWithGemini({
+        currentEthPrice,
+        priceChangePercent,
+        volatility,
+        technicalAnalysis,
+        fearGreed,
+        uniswapTVL,
+        sentimentScore,
+        newsHeadlines: newsItems.slice(0, 5).map(n => n.title)
+      });
+      console.log('✅ Gemini analysis complete\n');
+    } catch (err) {
+      console.warn('⚠️  Gemini analysis failed, using deterministic fallback:', (err as Error).message);
+      geminiReasoning = generateDeterministicReasoning(priceChangePercent, volatility, fearGreed.value, sentimentScore);
     }
 
     // ========================================================================
-    // STEP 4: Assess market condition
+    // STEP 4: Determine trend and condition (deterministic safety net)
     // ========================================================================
 
-    let marketCondition: 'stable' | 'volatile' | 'uncertain';
+    const ethTrend = priceChangePercent > 5 ? 'bullish'
+      : priceChangePercent < -5 ? 'bearish'
+      : 'neutral';
 
-    if (volatility < 15) {
-      marketCondition = 'stable';
-    } else if (volatility > 35) {
-      marketCondition = 'volatile';
-    } else {
-      marketCondition = 'uncertain';
-    }
+    const marketCondition = volatility < 15 ? 'stable'
+      : volatility > 35 ? 'volatile'
+      : 'uncertain';
 
-    // ========================================================================
-    // STEP 5: Generate recommendation
-    // ========================================================================
+    const recommendation = determineRecommendation(
+      ethTrend,
+      marketCondition,
+      technicalAnalysis.signal,
+      fearGreed.value
+    );
 
-    let recommendation: 'increase_eth' | 'decrease_eth' | 'maintain';
-    let reasoning: string;
+    const macroSignal = fearGreed.value > 60 && sentimentScore > 0 ? 'risk_on'
+      : fearGreed.value < 40 && sentimentScore < 0 ? 'risk_off'
+      : 'neutral';
 
-    // Decision logic based on trend and volatility
-    if (ethTrend === 'bullish' && marketCondition === 'stable') {
-      recommendation = 'increase_eth';
-      reasoning = `ETH shows strong bullish momentum (${priceChangePercent.toFixed(1)}% above 30-day average) with low volatility (${volatility.toFixed(1)}%). This is a favorable environment for increasing ETH exposure through liquidity provision.`;
-    } else if (ethTrend === 'bearish' && marketCondition === 'volatile') {
-      recommendation = 'decrease_eth';
-      reasoning = `ETH is in a bearish trend (${priceChangePercent.toFixed(1)}% below 30-day average) with high volatility (${volatility.toFixed(1)}%). Consider reducing ETH exposure or maintaining stable positions.`;
-    } else if (marketCondition === 'volatile') {
-      recommendation = 'maintain';
-      reasoning = `High market volatility (${volatility.toFixed(1)}%) suggests caution. ETH trend is ${ethTrend}, but volatile conditions make aggressive positioning risky. Consider maintaining current allocation or using wider price ranges for LP positions.`;
-    } else if (ethTrend === 'bullish') {
-      recommendation = 'increase_eth';
-      reasoning = `ETH shows bullish momentum (${priceChangePercent.toFixed(1)}% above average). Moderate volatility (${volatility.toFixed(1)}%) allows for strategic positioning. Good opportunity for ETH-based strategies.`;
-    } else if (ethTrend === 'bearish') {
-      recommendation = 'decrease_eth';
-      reasoning = `ETH is trending bearish (${priceChangePercent.toFixed(1)}% below average). Consider defensive positioning with more stablecoin allocation or hold current positions.`;
-    } else {
-      recommendation = 'maintain';
-      reasoning = `ETH price is near its 30-day average with moderate volatility (${volatility.toFixed(1)}%). Market is in a balanced state. Maintaining current allocation is prudent while monitoring for clearer trends.`;
-    }
+    const analysisConfidence = calculateConfidence(
+      volatility, fearGreed.value, technicalAnalysis.rsi, newsItems.length
+    );
 
     // ========================================================================
-    // STEP 6: Construct market analysis object
+    // STEP 5: Build analysis object
     // ========================================================================
 
-    const marketAnalysis: MarketAnalysis = {
+    marketAnalysis = {
       ethTrend,
       ethPriceChange30d: priceChangePercent,
       volatility,
       marketCondition,
       recommendation,
-      reasoning
+      fearGreedIndex: fearGreed.value,
+      fearGreedLabel: fearGreed.label,
+      sentimentScore,
+      newsHeadlines: newsItems.slice(0, 5),
+      technicalIndicators: {
+        rsi: technicalAnalysis.rsi,
+        macd: technicalAnalysis.macd,
+        bollingerBands: technicalAnalysis.bollingerBands,
+        ema7: technicalAnalysis.ema7,
+        ema30: technicalAnalysis.ema30,
+        signal: technicalAnalysis.signal
+      },
+      uniswapTVL: uniswapTVL.total,
+      uniswapTVLChange24h: uniswapTVL.change24h,
+      supportLevel: technicalAnalysis.supportResistance.support,
+      resistanceLevel: technicalAnalysis.supportResistance.resistance,
+      macroSignal,
+      analysisConfidence,
+      geminiReasoning,
+      reasoning: geminiReasoning
     };
 
     // ========================================================================
-    // STEP 7: Log results
+    // STEP 6: Log results
     // ========================================================================
 
     console.log('✅ MARKET ANALYSIS COMPLETE:');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`📊 Trend: ${ethTrend.toUpperCase()}`);
-    console.log(`📊 Volatility: ${volatility.toFixed(2)}% (${marketCondition})`);
+    console.log(`📊 Trend: ${ethTrend.toUpperCase()} | Condition: ${marketCondition.toUpperCase()}`);
+    console.log(`📊 Technical Signal: ${technicalAnalysis.signal.replace('_', ' ').toUpperCase()}`);
+    console.log(`📊 Macro Signal: ${macroSignal.toUpperCase()}`);
     console.log(`📊 Recommendation: ${recommendation.replace('_', ' ').toUpperCase()}`);
-    console.log(`\n💡 Reasoning: ${reasoning}`);
+    console.log(`📊 Confidence: ${(analysisConfidence * 100).toFixed(0)}%`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-
-    // ========================================================================
-    // STEP 8: Return updated state
-    // ========================================================================
 
     return {
       ...state,
-      marketAnalysis
+      marketAnalysis,
+      deepMarketAnalysis: marketAnalysis
     };
 
   } catch (error) {
     console.error('❌ Market Analyzer Agent failed:', error);
     throw new Error(`Market Analyzer Agent error: ${(error as Error).message}`);
   }
+}
+
+// ============================================================================
+// GEMINI ANALYSIS
+// ============================================================================
+
+interface MarketData {
+  currentEthPrice: number;
+  priceChangePercent: number;
+  volatility: number;
+  technicalAnalysis: any;
+  fearGreed: { value: number; label: string };
+  uniswapTVL: { total: number; change24h: number };
+  sentimentScore: number;
+  newsHeadlines: string[];
+}
+
+async function analyzeWithGemini(data: MarketData): Promise<string> {
+  const llm = new ChatGoogleGenerativeAI({
+    model: config.geminiModel,
+    apiKey: config.googleApiKey,
+    temperature: 0.3,
+  });
+
+  const systemPrompt = `You are a senior DeFi market analyst with expertise in technical analysis, on-chain metrics, and macroeconomic signals. Be concise but specific. Always cite the exact data values provided.`;
+
+  const userPrompt = `Analyze current DeFi market conditions and provide a 3-paragraph assessment:
+
+PRICE DATA:
+- Current ETH: $${data.currentEthPrice.toFixed(2)}
+- 30d price change: ${data.priceChangePercent.toFixed(2)}%
+- Annualized volatility: ${data.volatility.toFixed(2)}%
+
+TECHNICAL INDICATORS:
+- RSI(14): ${data.technicalAnalysis.rsi.toFixed(1)} ${data.technicalAnalysis.rsi > 70 ? '(overbought)' : data.technicalAnalysis.rsi < 30 ? '(oversold)' : '(neutral)'}
+- MACD: ${data.technicalAnalysis.macd.value.toFixed(2)}, Signal: ${data.technicalAnalysis.macd.signal.toFixed(2)}, Hist: ${data.technicalAnalysis.macd.histogram.toFixed(2)}
+- Bollinger %B: ${data.technicalAnalysis.bollingerBands.percentB?.toFixed(2) || 'N/A'}
+- Technical signal: ${data.technicalAnalysis.signal}
+- Price vs EMA7: ${data.technicalAnalysis.priceVsEma7?.toFixed(2) || '0'}%
+
+SENTIMENT & MACRO:
+- Fear & Greed: ${data.fearGreed.value} (${data.fearGreed.label})
+- News sentiment: ${data.sentimentScore.toFixed(2)} (scale: -1 bearish to +1 bullish)
+- Uniswap V3 TVL: $${(data.uniswapTVL.total / 1e9).toFixed(2)}B (${data.uniswapTVL.change24h.toFixed(2)}% 24h)
+
+TOP HEADLINES: ${data.newsHeadlines.slice(0, 3).join(' | ')}
+
+Write 3 paragraphs: (1) Technical picture, (2) Sentiment/macro picture, (3) Overall assessment for a DeFi LP provider.`;
+
+  const response = await llm.invoke([
+    new SystemMessage(systemPrompt),
+    new HumanMessage(userPrompt)
+  ]);
+
+  return typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
+}
+
+// ============================================================================
+// DETERMINISTIC HELPERS
+// ============================================================================
+
+function determineRecommendation(
+  trend: string,
+  condition: string,
+  technicalSignal: string,
+  fearGreed: number
+): 'increase_eth' | 'decrease_eth' | 'maintain' {
+  if ((trend === 'bullish' || technicalSignal.includes('buy')) && condition !== 'volatile') {
+    return 'increase_eth';
+  }
+  if ((trend === 'bearish' || technicalSignal.includes('sell')) && fearGreed < 30) {
+    return 'decrease_eth';
+  }
+  return 'maintain';
+}
+
+function calculateConfidence(
+  volatility: number,
+  fearGreed: number,
+  rsi: number,
+  newsCount: number
+): number {
+  let confidence = 0.7; // Base confidence
+
+  // Lower confidence in high volatility
+  if (volatility > 50) confidence -= 0.2;
+  else if (volatility < 20) confidence += 0.1;
+
+  // Higher confidence with more news data
+  if (newsCount > 5) confidence += 0.1;
+  if (newsCount === 0) confidence -= 0.15;
+
+  // Neutral RSI = higher confidence
+  if (rsi > 40 && rsi < 60) confidence += 0.05;
+
+  return Math.max(0.3, Math.min(0.95, confidence));
+}
+
+function generateDeterministicReasoning(
+  priceChange: number,
+  volatility: number,
+  fearGreed: number,
+  sentiment: number
+): string {
+  const trendText = priceChange > 5 ? 'bullish momentum' : priceChange < -5 ? 'bearish pressure' : 'sideways consolidation';
+  const volText = volatility > 35 ? 'high volatility' : volatility < 15 ? 'low volatility' : 'moderate volatility';
+  const fgText = fearGreed > 60 ? 'greed-driven market' : fearGreed < 40 ? 'fear-driven market' : 'balanced sentiment';
+
+  return `ETH shows ${trendText} with ${priceChange.toFixed(1)}% 30-day price change. Market exhibits ${volText} at ${volatility.toFixed(1)}% annualized. ` +
+    `Macro sentiment is ${fgText} (F&G: ${fearGreed}/100) with news sentiment at ${sentiment.toFixed(2)}. ` +
+    `${volatility > 35 ? 'High volatility warrants caution for new LP positions.' : 'Current conditions suggest monitoring price action before committing capital.'}`;
 }

@@ -175,6 +175,9 @@ export function AgentPipeline({ status, workflowState, currentAgentName }: Agent
              <div className="hidden md:block absolute -left-[50%] top-1/2 w-1/2 h-1 bg-gradient-to-l from-neon-purple to-transparent -z-10 opacity-50" />
           </div>
 
+          {/* Desktop-Only connector from Agent 5 to Center (Visualization of output) */}
+          <div className="hidden md:block md:col-start-2 md:row-start-3 absolute left-1/2 -bottom-24 w-1 h-24 bg-gradient-to-b from-neon-purple to-transparent opacity-30 -z-10 -translate-x-1/2" />
+
         </div>
 
         {/* Central Background Glow */}

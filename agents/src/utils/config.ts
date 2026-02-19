@@ -72,6 +72,9 @@ export const config = {
   coingeckoApiUrl: process.env.COINGECKO_API_URL!,
   coingeckoApiKey: process.env.COINGECKO_API_KEY || '', // Optional - CoinGecko demo API key
   theGraphApiKey: process.env.THE_GRAPH_API_KEY || '', // Optional - The Graph API key
+  newsApiKey: process.env.NEWS_API_KEY || '', // NewsAPI key
+  fearGreedUrl: 'https://api.alternative.me/fng/', // No key needed
+  defiLlamaUrl: 'https://api.llama.fi', // No key needed
   theGraphUrl: process.env.THE_GRAPH_API_KEY
     ? `https://gateway.thegraph.com/api/${process.env.THE_GRAPH_API_KEY}/subgraphs/id/EDJCBpDBGBajTP1x3qLGLg3ZaVR5Q2TkNxyNHdCuryex`
     : 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3-sepolia', // Fallback to old endpoint (will use mock data)
