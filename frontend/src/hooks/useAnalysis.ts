@@ -42,8 +42,16 @@ export function useAnalysis() {
         
         if (data.status === "complete") {
           setStatus("complete");
+          
+          // Fix: workflowState might be at root level OR inside result, depending on backend structure
+          // Based on user feedback, it seems to be at root level or nested differently
+          const finalState = data.workflowState || data.result?.workflowState;
+          
+          if (finalState) {
+            setWorkflowState(finalState);
+          }
+          
           setResult(data.result);
-          setWorkflowState(data.result.workflowState);
           setCurrentAgentIndex(AGENT_DEFINITIONS.length); // All done
           
           // Stop timers
@@ -57,8 +65,9 @@ export function useAnalysis() {
           if (visualTimerRef.current) clearInterval(visualTimerRef.current);
         } else {
           // Update partial state if available
-          if (data.workflowState) {
-            setWorkflowState(data.workflowState);
+          const partialState = data.workflowState || data.result?.workflowState;
+          if (partialState) {
+            setWorkflowState(partialState);
           }
         }
       } catch (err) {

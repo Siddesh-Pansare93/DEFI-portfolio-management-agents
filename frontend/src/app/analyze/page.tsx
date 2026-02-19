@@ -87,7 +87,7 @@ function AnalyzeContent() {
     );
   }
 
-  const showResults = status === "complete" && workflowState?.finalRecommendation;
+  const showResults = (status === "complete" || (status === "analyzing" && !!workflowState?.finalRecommendation));
 
   return (
     <div className="min-h-screen pb-20 bg-bg-void overflow-x-hidden">
@@ -149,8 +149,10 @@ function AnalyzeContent() {
         <AnimatePresence>
           {showResults && workflowState && (
             <motion.div 
+              key="results-container"
               initial={{ opacity: 0, y: 100 }}
               animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 100 }}
               transition={{ duration: 0.8, ease: "easeOut" }}
               className="space-y-8"
             >
