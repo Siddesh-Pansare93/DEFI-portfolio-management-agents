@@ -44,6 +44,14 @@ function AnalyzeContent() {
 
   const handleExecute = () => {
     if (!workflowState?.finalRecommendation) return;
+    
+    // Check if address is placeholder
+    if (REBALANCE_LOGGER_ADDRESS === "0x1234567890123456789012345678901234567890") {
+      toast.warning("Simulation Mode", {
+        description: "Contract address is not configured. Execution simulated.",
+      });
+      return;
+    }
 
     writeContract({
       address: REBALANCE_LOGGER_ADDRESS as `0x${string}`,
@@ -131,12 +139,22 @@ function AnalyzeContent() {
         {/* Error Display */}
         {error && (
           <GlowContainer glowColor="orange" intensity="high" className="bg-red-950/20 border-red-500/50">
-             <div className="flex items-center gap-4 text-red-400">
-               <AlertCircle className="w-6 h-6" />
-               <div>
-                 <h3 className="font-bold">Execution Failed</h3>
-                 <p className="text-sm font-mono opacity-80">{error}</p>
+             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-red-400">
+               <div className="flex items-center gap-4">
+                 <AlertCircle className="w-6 h-6 shrink-0" />
+                 <div>
+                   <h3 className="font-bold">Execution Failed</h3>
+                   <p className="text-sm font-mono opacity-80">{error}</p>
+                 </div>
                </div>
+               <Button 
+                 variant="outline" 
+                 size="sm" 
+                 className="border-red-500/50 text-red-400 hover:bg-red-500/10 hover:text-red-300 w-full md:w-auto"
+                 onClick={() => window.location.reload()}
+               >
+                 Retry Analysis
+               </Button>
              </div>
           </GlowContainer>
         )}
