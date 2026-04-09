@@ -39,5 +39,37 @@ export function usePreferences() {
     }
   };
 
-  return { preferences, setPreferences, isLoaded } as const;
+  // Alias for compatibility
+  const updatePreference = setPreferences;
+  const applyPreset = (riskAppetite: UserPreferences['riskAppetite']) => {
+    let newPrefs: Partial<UserPreferences> = { riskAppetite };
+
+    if (riskAppetite === 'conservative') {
+      newPrefs = {
+        ...newPrefs,
+        maxImpermanentLoss: 7,
+        maxPositionSize: 50,
+        preferredActions: ['hold', 'add_liquidity'],
+      };
+    } else if (riskAppetite === 'moderate') {
+      newPrefs = {
+        ...newPrefs,
+        maxImpermanentLoss: 10,
+        maxPositionSize: 70,
+        preferredActions: ['add_liquidity', 'swap', 'hold'],
+      };
+    } else {
+      // Aggressive
+      newPrefs = {
+        ...newPrefs,
+        maxImpermanentLoss: 15,
+        maxPositionSize: 90,
+        preferredActions: ['swap', 'add_liquidity'],
+      };
+    }
+
+    setPreferences(newPrefs);
+  };
+
+  return { preferences, setPreferences, updatePreference, applyPreset, isLoaded } as const;
 }

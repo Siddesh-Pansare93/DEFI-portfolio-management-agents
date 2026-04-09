@@ -24,6 +24,8 @@ import { NashBargainingViz } from "@/components/charts/NashBargainingViz";
 import { PortfolioSnapshot } from "@/components/results/PortfolioSnapshot";
 import { MarketAnalysisPanel } from "@/components/results/MarketAnalysisPanel";
 import { WorkflowSummary } from "@/components/results/WorkflowSummary";
+import { NewsHeadlinesPanel } from "@/components/results/NewsHeadlinesPanel";
+import { TechnicalIndicatorsCard } from "@/components/results/TechnicalIndicatorsCard";
 
 function AnalyzeContent() {
   const searchParams = useSearchParams();
@@ -47,7 +49,7 @@ function AnalyzeContent() {
     if (!workflowState?.finalRecommendation) return;
     
     // Check if address is placeholder
-    if (REBALANCE_LOGGER_ADDRESS === "0x1234567890123456789012345678901234567890") {
+    if (!REBALANCE_LOGGER_ADDRESS || REBALANCE_LOGGER_ADDRESS.length < 42) {
       toast.warning("Simulation Mode", {
         description: "Contract address is not configured. Execution simulated.",
       });
@@ -215,10 +217,20 @@ function AnalyzeContent() {
               {/* 3. Detailed Panels */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <PortfolioSnapshot data={workflowState.portfolio} />
-                <MarketAnalysisPanel data={workflowState.marketAnalysis} />
+                <MarketAnalysisPanel data={workflowState.deepMarketAnalysis || workflowState.marketAnalysis} />
               </div>
 
-              {/* 4. Full Trace Accordion */}
+              {/* 4. Deep Dive Data */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {workflowState.deepMarketAnalysis?.technicalIndicators && (
+                  <TechnicalIndicatorsCard indicators={workflowState.deepMarketAnalysis.technicalIndicators} />
+                )}
+                {workflowState.deepMarketAnalysis?.newsHeadlines && (
+                  <NewsHeadlinesPanel headlines={workflowState.deepMarketAnalysis.newsHeadlines} />
+                )}
+              </div>
+
+              {/* 5. Full Trace Accordion */}
               <WorkflowSummary state={workflowState} />
 
             </motion.div>

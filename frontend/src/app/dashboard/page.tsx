@@ -39,7 +39,7 @@ export default function DashboardPage() {
   const [portfolioError, setPortfolioError] = useState<string | null>(null);
 
   // Preferences Hook
-  const { preferences, updatePreference, applyPreset } = usePreferences();
+  const { preferences, setPreferences } = usePreferences();
 
   // Redirect if not connected
   useEffect(() => {
@@ -179,8 +179,7 @@ export default function DashboardPage() {
           {/* Risk Preferences Panel */}
           <RiskPreferencesPanel 
             preferences={preferences}
-            onUpdate={updatePreference}
-            onApplyPreset={applyPreset}
+            onChange={setPreferences}
           />
 
           {/* Start Analysis Button (Sticky on mobile bottom?) */}

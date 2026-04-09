@@ -12,6 +12,7 @@ import { config } from './utils/config';
 // ============================================================================
 
 const MAX_NEGOTIATION_ROUNDS = 10;
+const MIN_NEGOTIATION_ROUNDS = 5;
 
 // ============================================================================
 // CONDITIONAL ROUTING
@@ -24,18 +25,27 @@ const MAX_NEGOTIATION_ROUNDS = 10;
  */
 function routeAfterRiskValidation(state: WorkflowState): string {
   const { riskValidation, negotiationRound } = state;
+  const round = negotiationRound || 0;
 
-  if (riskValidation?.approved) {
-    console.log(`\n✅ Risk Validator APPROVED → proceeding to Negotiator\n`);
-    return 'negotiator';
+  // CRITICAL: Force minimum rounds for thorough debate (BEFORE checking approval)
+  if (round < MIN_NEGOTIATION_ROUNDS) {
+    console.log(`\n🔄 Round ${round}/${MIN_NEGOTIATION_ROUNDS} (minimum) → forcing continued negotiation...\n`);
+    return 'strategyProposer';
   }
 
-  if ((negotiationRound || 0) >= MAX_NEGOTIATION_ROUNDS) {
+  // After minimum rounds, check if max reached
+  if (round >= MAX_NEGOTIATION_ROUNDS) {
     console.log(`\n⏱️  Max rounds (${MAX_NEGOTIATION_ROUNDS}) reached → forcing final decision\n`);
     return 'negotiator';
   }
 
-  console.log(`\n🔄 Round ${negotiationRound} rejected → Strategy Proposer refines...\n`);
+  // Between MIN and MAX rounds: approval or rejection determines path
+  if (riskValidation?.approved) {
+    console.log(`\n✅ Risk Validator APPROVED (Round ${round}) → proceeding to Negotiator\n`);
+    return 'negotiator';
+  }
+
+  console.log(`\n🔄 Round ${round} rejected → Strategy Proposer refines...\n`);
   return 'strategyProposer';
 }
 

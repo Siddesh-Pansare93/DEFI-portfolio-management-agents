@@ -354,4 +354,4 @@ export const REBALANCE_LOGGER_ABI = [
 ] as const;
 
 // Replace this with your deployed contract address on Sepolia
-export const REBALANCE_LOGGER_ADDRESS = "0x1234567890123456789012345678901234567890";
+export const REBALANCE_LOGGER_ADDRESS = "0x4F3DD9522c2d1B240365516a46250226e4eB7B3B";

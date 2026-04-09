@@ -179,6 +179,7 @@ export interface WorkflowState {
   userPreferences?: UserPreferences;
   portfolio: PortfolioData | null;
   marketAnalysis: MarketAnalysis | null;
+  deepMarketAnalysis?: DeepMarketAnalysis | null;
   strategyProposal: StrategyProposal | null;
   riskValidation: RiskValidation | null;
   finalRecommendation: FinalRecommendation | null;
