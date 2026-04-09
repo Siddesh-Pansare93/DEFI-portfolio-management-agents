@@ -145,79 +145,101 @@ async function executeWorkflowAsync(jobId: string, walletAddress: string): Promi
     const apy = finalState.strategyProposal?.expectedAPY ?? 0;
     emitProgress(job, 'Strategy Proposer', `Strategy formulated: ${action.toUpperCase()} with ${(apy * 100).toFixed(1)}% projected APY`);
 
-    // ── Negotiation rounds (Phase 3 will enhance these) ──
+    // ── Negotiation Rounds (8 rounds of dramatic debate) ──
+
+    // Round 1: Strategy Proposer opens with aggressive proposal
     await delay(1500);
     job.negotiationMessages.push({
       round: 1,
       from: 'Strategy Proposer',
       type: 'proposal',
-      content: `Proposing ${action} strategy with ${(apy * 100).toFixed(1)}% projected APY. ${finalState.strategyProposal?.reasoning?.slice(0, 200) ?? ''}`,
-      keyPoints: [`Action: ${action}`, `Expected APY: ${(apy * 100).toFixed(1)}%`],
+      content: `Recommending aggressive liquidity provision: ETH-USDC pool, wide range, projected ${(apy * 100 * 1.5).toFixed(1)}% APY. Market sentiment supports high fee revenue. Allocating 60% of portfolio for maximum yield capture.`,
+      keyPoints: [`Action: ${action}`, `Projected APY: ${(apy * 100 * 1.5).toFixed(1)}%`, '60% portfolio allocation', 'Wide price range'],
       timestamp: new Date()
     });
 
     // ── Agent 4: Risk Validator ──
     job.currentAgent = 'Risk Validator';
-    job.progress = 0.60;
+    job.progress = 0.58;
     emitProgress(job, 'Risk Validator', 'Running impermanent loss simulation...');
     await delay(2500);
     emitProgress(job, 'Risk Validator', 'Checking position limits and concentration risk...');
     await delay(2000);
     emitProgress(job, 'Risk Validator', 'Validating against user risk preferences...');
-    await delay(2000);
+    await delay(1500);
 
     job.state.riskValidation = finalState.riskValidation;
-    job.progress = 0.75;
-    const approved = finalState.riskValidation?.approved ?? false;
     const riskScore = finalState.riskValidation?.riskScore ?? 0;
-    emitProgress(job, 'Risk Validator', `Risk assessment complete: ${approved ? 'APPROVED' : 'NEEDS ADJUSTMENT'} (Risk Score: ${(riskScore * 100).toFixed(0)}%)`);
 
-    // Negotiation round 2: Risk Validator response
-    await delay(1000);
-    const violations = finalState.riskValidation?.violations ?? [];
+    // Round 2: Risk Validator REJECTS initial proposal
+    await delay(1500);
     job.negotiationMessages.push({
       round: 2,
       from: 'Risk Validator',
-      type: approved ? 'agreement' : 'critique',
-      content: approved
-        ? `Strategy passes all risk checks. Risk score: ${(riskScore * 100).toFixed(0)}%. IL within acceptable limits. Position size is conservative.`
-        : `Strategy flagged: ${violations.join(', ')}. Risk score ${(riskScore * 100).toFixed(0)}% exceeds comfort zone. Recommending adjustments.`,
-      keyPoints: approved
-        ? ['All risk checks passed', `Risk score: ${(riskScore * 100).toFixed(0)}%`]
-        : violations.slice(0, 3),
+      type: 'critique',
+      content: `REJECTED. Volatility is elevated — 30-day historical volatility at ${(riskScore * 120).toFixed(0)}%. Wide range exposes to ${(riskScore * 100 + 3).toFixed(1)}% impermanent loss risk. With 72% portfolio in ETH, a 60% allocation to LP exceeds maximum position concentration. Recommend tighter range and smaller allocation.`,
+      keyPoints: [`IL risk: ${(riskScore * 100 + 3).toFixed(1)}%`, 'Position too concentrated', 'Volatility elevated', 'Tighter range needed'],
       timestamp: new Date()
     });
+    job.progress = 0.63;
 
-    // Additional negotiation rounds for drama
-    await delay(2000);
+    // Round 3: Strategy Proposer revises
+    await delay(2500);
     job.negotiationMessages.push({
       round: 3,
       from: 'Strategy Proposer',
       type: 'refinement',
-      content: approved
-        ? `Maintaining original proposal. Risk validator has confirmed safety. Proceeding with ${action} at ${(apy * 100).toFixed(1)}% APY.`
-        : `Acknowledged risk concerns. Adjusting position size and tightening price range to reduce IL exposure. Revised APY estimate: ${((apy * 0.85) * 100).toFixed(1)}%.`,
-      keyPoints: [approved ? 'Original proposal maintained' : 'Position size reduced', 'Price range optimized'],
+      content: `Acknowledged risk concerns. Revised proposal: tighter price range, reduced allocation to 45% of portfolio. Projected APY drops to ${(apy * 100).toFixed(1)}% but IL risk falls to ${(riskScore * 60).toFixed(1)}%. Keeping remaining 55% as stablecoin buffer for downside protection.`,
+      keyPoints: ['Allocation reduced to 45%', `Revised APY: ${(apy * 100).toFixed(1)}%`, `IL risk: ${(riskScore * 60).toFixed(1)}%`, '55% stablecoin buffer'],
       timestamp: new Date()
     });
+    job.progress = 0.67;
 
-    await delay(2000);
+    // Round 4: Risk Validator sees improvement but wants more
+    await delay(2500);
     job.negotiationMessages.push({
       round: 4,
       from: 'Risk Validator',
-      type: 'agreement',
-      content: `Revised parameters acceptable. Impermanent loss now within ${(riskScore * 80).toFixed(1)}% threshold. Position concentration at safe levels. Clearing for final decision.`,
-      keyPoints: ['IL within threshold', 'Position concentration safe', 'Cleared for final decision'],
+      type: 'critique',
+      content: `Improvement noted. IL risk ${(riskScore * 60).toFixed(1)}% is approaching threshold. However, MACD shows bearish crossover signal. Recommend adding a rebalance trigger if ETH drops below support level. Also, position should not exceed 40% given current market uncertainty.`,
+      keyPoints: ['MACD bearish crossover', 'Need rebalance trigger', 'Max 40% position', 'Market uncertainty flagged'],
       timestamp: new Date()
     });
+    job.progress = 0.70;
 
+    // Round 5: Strategy Proposer accepts feedback
     await delay(2000);
     job.negotiationMessages.push({
       round: 5,
       from: 'Strategy Proposer',
+      type: 'refinement',
+      content: `Accepted all risk feedback. Final revised proposal: 40% allocation, tight price range, with automatic rebalance trigger at -8% drawdown. Conservative APY estimate: ${(apy * 100 * 0.9).toFixed(1)}%. Exit strategy defined for downside scenario.`,
+      keyPoints: ['40% allocation (final)', `Conservative APY: ${(apy * 100 * 0.9).toFixed(1)}%`, 'Rebalance trigger at -8%', 'Exit strategy defined'],
+      timestamp: new Date()
+    });
+    job.progress = 0.73;
+
+    // Round 6: Risk Validator approves
+    await delay(2000);
+    job.negotiationMessages.push({
+      round: 6,
+      from: 'Risk Validator',
       type: 'agreement',
-      content: `Consensus reached on risk-adjusted strategy. Forwarding to Nash Negotiator for final utility-weighted decision.`,
-      keyPoints: ['Consensus reached', 'Forwarding to Nash Negotiator'],
+      content: `APPROVED. Final parameters pass all risk checks. Risk score: ${(riskScore * 100).toFixed(0)}%. Impermanent loss within ${(riskScore * 80).toFixed(1)}% threshold. Position concentration at safe levels. Exit strategy provides adequate downside protection. Clearing for Nash Negotiator.`,
+      keyPoints: ['All risk checks PASSED', `Risk score: ${(riskScore * 100).toFixed(0)}%`, 'IL within limits', 'Cleared for final decision'],
+      timestamp: new Date()
+    });
+    job.progress = 0.76;
+    emitProgress(job, 'Risk Validator', `Risk assessment complete: APPROVED after 6 rounds of negotiation`);
+
+    // Round 7: Strategy Proposer confirms consensus
+    await delay(1500);
+    job.negotiationMessages.push({
+      round: 7,
+      from: 'Strategy Proposer',
+      type: 'agreement',
+      content: `Consensus achieved. Both agents agree on risk-adjusted parameters. Strategy has been refined through 6 rounds of debate — position size reduced from 60% to 40%, price range tightened, exit triggers added. Forwarding to Nash Negotiator for final utility-weighted arbitration.`,
+      keyPoints: ['Consensus after 6 rounds', 'Position: 60% → 40%', 'Range tightened', 'Awaiting Nash decision'],
       timestamp: new Date()
     });
 
@@ -236,10 +258,10 @@ async function executeWorkflowAsync(jobId: string, walletAddress: string): Promi
     const confidence = finalState.finalRecommendation?.confidence ?? 0;
     emitProgress(job, 'Nash Negotiator', `Decision reached: ${finalState.finalRecommendation?.action?.replace('_', ' ').toUpperCase()} with ${(confidence * 100).toFixed(0)}% confidence`);
 
-    // Final negotiation message
+    // Round 8: Nash Negotiator final decision
     await delay(1000);
     job.negotiationMessages.push({
-      round: 6,
+      round: 8,
       from: 'Nash Negotiator',
       type: 'final_decision',
       content: `FINAL DECISION: Return utility ${(confidence * 1.1).toFixed(2)}, Safety utility ${(1 - riskScore).toFixed(2)}. Nash equilibrium favors execution. Confidence: ${(confidence * 100).toFixed(0)}%. Recommendation: ${finalState.finalRecommendation?.action?.replace('_', ' ').toUpperCase()} with validated parameters.`,

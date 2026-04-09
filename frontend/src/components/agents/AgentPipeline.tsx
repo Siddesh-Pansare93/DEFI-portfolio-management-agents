@@ -27,6 +27,22 @@ export function AgentPipeline({ status, workflowState, currentAgentName }: Agent
     return "idle";
   };
 
+  // Map color names to hex values
+  const COLOR_MAP: Record<string, string> = {
+    cyan: '#06B6D4',
+    blue: '#6366F1',
+    yellow: '#F59E0B',
+    orange: '#EF4444',
+    purple: '#8B5CF6',
+  };
+  const GLOW_MAP: Record<string, string> = {
+    cyan: 'rgba(6, 182, 212, 0.25)',
+    blue: 'rgba(99, 102, 241, 0.25)',
+    yellow: 'rgba(245, 158, 11, 0.25)',
+    orange: 'rgba(239, 68, 68, 0.25)',
+    purple: 'rgba(139, 92, 246, 0.30)',
+  };
+
   // Hardcoded positions based on the neural layout spec
   // 1: Data Collector -> 2: Market Analyzer
   // 1: Data Collector -> 4: Risk Validator
@@ -46,28 +62,13 @@ export function AgentPipeline({ status, workflowState, currentAgentName }: Agent
     id: def.name.toLowerCase().split(" ")[1] || def.name.toLowerCase().split(" ")[0],
     name: def.name,
     status: getNodeStatus(idx),
-    message: getNodeStatus(idx) === "active" ? def.activeMessage : undefined,
+    message: getNodeStatus(idx) === "active" ? def.message : undefined,
     icon: def.icon,
-    colorHex: def.color,
-    glowColor: def.color.replace(')', ', 0.3)').replace('rgb', 'rgba'), // Approximation, better if defined in constants
+    colorHex: COLOR_MAP[def.color] || '#8B5CF6',
+    glowColor: GLOW_MAP[def.color] || 'rgba(139, 92, 246, 0.25)',
     x: POSITIONS[idx]?.x || 0,
     y: POSITIONS[idx]?.y || 0,
   }));
-
-  // Fix glow colors specifically for the palette
-  const glowColors: Record<string, string> = {
-    '#06B6D4': 'rgba(6, 182, 212, 0.25)',
-    '#3B82F6': 'rgba(99, 102, 241, 0.25)', // Wait, analyzer was indigo #6366F1 in new spec, but constants might use blue.
-    '#F59E0B': 'rgba(245, 158, 11, 0.25)',
-    '#EF4444': 'rgba(239, 68, 68, 0.25)',
-    '#8B5CF6': 'rgba(139, 92, 246, 0.30)',
-  };
-
-  agentStates.forEach(a => {
-    if (glowColors[a.colorHex]) {
-      a.glowColor = glowColors[a.colorHex];
-    }
-  });
 
   return (
     <div className="w-full flex flex-col gap-6">

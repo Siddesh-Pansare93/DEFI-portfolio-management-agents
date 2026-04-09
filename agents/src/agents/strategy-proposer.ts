@@ -72,23 +72,21 @@ export async function runStrategyProposer(state: WorkflowState): Promise<Workflo
         expectedReturn1Year: 0,
         reasoning: `Portfolio value ($${totalValue.toFixed(2)}) is below minimum threshold ($${minPortfolioValue}). Accumulate more capital before implementing active strategies. Focus on acquiring more ETH or USDC.`
       };
-    } else if (marketAnalysis.recommendation === 'increase_eth' && ethAllocation < 70) {
-      // ADD LIQUIDITY strategy - bullish market, good for LP
-      strategyProposal = await proposeAddLiquidity(state);
-    } else if (marketAnalysis.recommendation === 'decrease_eth' && ethAllocation > 30) {
-      // SWAP strategy - bearish market, reduce ETH exposure
+    } else if (marketAnalysis.recommendation === 'decrease_eth' && ethAllocation > 80 && marketAnalysis.ethTrend === 'bearish') {
+      // SWAP strategy - only when strongly bearish AND very concentrated
       strategyProposal = proposeSwapToStable(state);
-    } else if (ethAllocation >= 40 && ethAllocation <= 60) {
-      // ADD LIQUIDITY - balanced portfolio, good for LP
+    } else if (totalValue >= minPortfolioValue) {
+      // ADD LIQUIDITY strategy — default for any portfolio with sufficient funds
+      // This is the core DeFi action — provide liquidity, earn fees
       strategyProposal = await proposeAddLiquidity(state);
     } else {
-      // HOLD strategy - wait for better conditions
+      // HOLD strategy - fallback
       strategyProposal = {
         action: 'hold',
         details: null,
         expectedAPY: 0,
         expectedReturn1Year: 0,
-        reasoning: `Current allocation (${ethAllocation.toFixed(1)}% ETH) is ${ethAllocation > 60 ? 'heavily weighted toward ETH' : 'heavily weighted toward USDC'}. Market conditions (${marketAnalysis.ethTrend}, ${marketAnalysis.volatility.toFixed(1)}% volatility) suggest maintaining current position. Consider rebalancing when market stabilizes.`
+        reasoning: `Current allocation (${ethAllocation.toFixed(1)}% ETH) under review. Market conditions (${marketAnalysis.ethTrend}, ${marketAnalysis.volatility.toFixed(1)}% volatility) suggest maintaining current position until clearer signals emerge.`
       };
     }
 

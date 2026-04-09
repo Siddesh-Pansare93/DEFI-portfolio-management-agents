@@ -85,7 +85,9 @@ export function calculateOptimalRange(
   // Higher volatility = wider range to avoid going out of range
   const rangePercent = (volatility / 100) * rangeMultiplier;
 
-  const lowerPrice = currentPrice * (1 - rangePercent);
+  // Cap range so lower price never goes below 10% of current price
+  const cappedRangeDown = Math.min(rangePercent, 0.90);
+  const lowerPrice = currentPrice * (1 - cappedRangeDown);
   const upperPrice = currentPrice * (1 + rangePercent);
 
   // Convert prices to Uniswap V3 ticks
@@ -219,9 +221,16 @@ export function calculateMaxILInRange(
   lowerPrice: number,
   upperPrice: number
 ): number {
+  // Ensure prices are valid and positive
+  const safeLower = Math.max(lowerPrice, currentPrice * 0.01); // At least 1% of current
+  const safeUpper = Math.max(upperPrice, currentPrice * 1.01);  // At least 1% above current
+
   // Max IL occurs at range boundaries
-  const ilAtLower = calculateImpermanentLoss(lowerPrice / currentPrice);
-  const ilAtUpper = calculateImpermanentLoss(upperPrice / currentPrice);
+  const ratioLower = safeLower / currentPrice;
+  const ratioUpper = safeUpper / currentPrice;
+
+  const ilAtLower = calculateImpermanentLoss(ratioLower > 0 ? ratioLower : 0.01);
+  const ilAtUpper = calculateImpermanentLoss(ratioUpper > 0 ? ratioUpper : 0.01);
 
   return Math.max(ilAtLower, ilAtUpper);
 }

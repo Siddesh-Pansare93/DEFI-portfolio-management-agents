@@ -40,7 +40,30 @@ export function NeuralNetwork({ agents = DEFAULT_AGENTS }: { agents?: AgentState
     <div className="relative w-full max-w-[800px] h-[400px] mx-auto hidden md:block">
       {/* Container for absolute positioned SVG synapses */}
       <div className="absolute inset-0 pointer-events-none">
-        <svg className="w-full h-full">
+        <svg className="w-full h-full" style={{ overflow: 'visible' }}>
+          {/* Glow filters for traveling particles */}
+          <defs>
+            <filter id="glow-06B6D4" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+            <filter id="glow-6366F1" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+            <filter id="glow-F59E0B" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+            <filter id="glow-EF4444" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+            <filter id="glow-8B5CF6" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+          </defs>
           {connections.map(conn => {
             const fromNode = agents.find(a => a.id === conn.from);
             const toNode = agents.find(a => a.id === conn.to);

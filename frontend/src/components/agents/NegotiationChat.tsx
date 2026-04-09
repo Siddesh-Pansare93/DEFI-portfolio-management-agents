@@ -147,7 +147,7 @@ export default function NegotiationChat({ messages, status }: NegotiationChatPro
                       className="relative z-10 w-full h-full rounded-full flex items-center justify-center border border-[rgba(255,255,255,0.1)]"
                       style={{ background: `radial-gradient(circle at center, ${style.colorHex} 0%, transparent 80%)`, backgroundColor: '#0A0A0F' }}
                     >
-                      {React.cloneElement(style.icon as React.ReactElement, { className: "w-3.5 h-3.5" })}
+                      {React.cloneElement(style.icon as React.ReactElement<{ className?: string }>, { className: "w-3.5 h-3.5" })}
                     </div>
                   </div>
                   
