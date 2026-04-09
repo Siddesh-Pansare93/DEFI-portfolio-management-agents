@@ -1,9 +1,7 @@
 "use client";
 
-import { GlowContainer } from "@/components/layout/GlowContainer";
 import { PortfolioData } from "@/lib/types";
-import { formatUSD, formatPercent, cn } from "@/lib/utils";
-import { Database, Activity, RefreshCw } from "lucide-react";
+import { formatUSD, formatPercent } from "@/lib/utils";
 
 interface PortfolioSnapshotProps {
   data: PortfolioData | null;
@@ -14,53 +12,58 @@ export function PortfolioSnapshot({ data }: PortfolioSnapshotProps) {
 
   const { holdings, totalValueUSD, allocationPercent, uniswapPool } = data;
 
+  const stats = [
+    {
+      label: "Total Value",
+      value: formatUSD(totalValueUSD),
+    },
+    {
+      label: "ETH Balance",
+      value: `${holdings.ETH.balance.toFixed(4)} ETH`,
+      sub: formatUSD(holdings.ETH.valueUSD),
+    },
+    {
+      label: "USDC Balance",
+      value: `${holdings.USDC.balance.toFixed(2)} USDC`,
+      sub: formatUSD(holdings.USDC.valueUSD),
+    },
+    {
+      label: "ETH Allocation",
+      value: formatPercent(allocationPercent.ETH),
+    },
+    {
+      label: "USDC Allocation",
+      value: formatPercent(allocationPercent.USDC),
+    },
+    {
+      label: "Pool Volume (24h)",
+      value: formatUSD(uniswapPool.volume24h),
+    },
+  ];
+
   return (
-    <GlowContainer glowColor="cyan" intensity="low" className="flex flex-col gap-6 p-6 h-full">
-      <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-        <Database className="text-neon-cyan w-5 h-5" />
-        <h3 className="font-orbitron text-lg text-white tracking-wider">Portfolio State</h3>
-      </div>
+    <div className="bg-[#222735] border border-[#334155] rounded-2xl p-6 h-full">
+      <h3 className="uppercase tracking-wider text-[#64748B] text-xs font-semibold mb-5">
+        Portfolio Snapshot
+      </h3>
 
-      <div className="grid grid-cols-2 gap-8 md:grid-cols-4 md:gap-4">
-        {/* Total Value */}
-        <div className="space-y-1">
-          <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest">Total Value</span>
-          <div className="text-2xl font-mono font-bold text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.3)]">
-            {formatUSD(totalValueUSD)}
-          </div>
-        </div>
-
-        {/* ETH Allocation */}
-        <div className="space-y-1">
-          <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest">ETH Allocation</span>
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-6 bg-neon-cyan rounded-full shadow-[0_0_8px_#00ffff]" />
-            <span className="text-lg font-mono font-bold text-neon-cyan">
-              {formatPercent(allocationPercent.ETH)}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
+        {stats.map((stat) => (
+          <div key={stat.label} className="space-y-1">
+            <span className="text-xs text-[#64748B] uppercase tracking-wider block">
+              {stat.label}
             </span>
-          </div>
-        </div>
-
-        {/* USDC Allocation */}
-        <div className="space-y-1">
-          <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest">USDC Allocation</span>
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-6 bg-[#ff00ff] rounded-full shadow-[0_0_8px_#ff00ff]" />
-            <span className="text-lg font-mono font-bold text-[#ff00ff]">
-              {formatPercent(allocationPercent.USDC)}
+            <span className="font-mono text-white text-lg font-medium block">
+              {stat.value}
             </span>
+            {stat.sub && (
+              <span className="text-xs text-[#64748B] font-mono block">
+                {stat.sub}
+              </span>
+            )}
           </div>
-        </div>
-
-        {/* Pool Activity */}
-        <div className="space-y-1">
-          <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest">Pool Volume (24h)</span>
-          <div className="flex items-center gap-2 text-zinc-300">
-            <Activity className="w-4 h-4 text-zinc-500" />
-            <span className="font-mono">{formatUSD(uniswapPool.volume24h)}</span>
-          </div>
-        </div>
+        ))}
       </div>
-    </GlowContainer>
+    </div>
   );
 }

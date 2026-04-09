@@ -2,6 +2,21 @@ import { useState, useEffect, useRef } from "react";
 import { JobStatus, WorkflowState } from "@/lib/types";
 import { AGENT_DEFINITIONS, ANIMATION_DURATION_PER_AGENT } from "@/lib/constants";
 
+export interface ProgressMessage {
+  agent: string;
+  message: string;
+  timestamp: Date;
+}
+
+export interface NegotiationMessage {
+  round: number;
+  from: string;
+  type: string;
+  content: string;
+  keyPoints: string[];
+  timestamp: Date;
+}
+
 export function useAnalysis() {
   const [status, setStatus] = useState<JobStatus>("pending");
   const [currentAgentIndex, setCurrentAgentIndex] = useState(-1);
@@ -10,6 +25,8 @@ export function useAnalysis() {
   const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<any | null>(null);
+  const [progressMessages, setProgressMessages] = useState<ProgressMessage[]>([]);
+  const [negotiationMessages, setNegotiationMessages] = useState<NegotiationMessage[]>([]);
 
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const visualTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -21,6 +38,8 @@ export function useAnalysis() {
     setError(null);
     setCurrentAgentIndex(0);
     setCurrentAgentName("Data Collector");
+    setProgressMessages([]);
+    setNegotiationMessages([]);
 
     // Clear existing intervals
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
@@ -39,43 +58,44 @@ export function useAnalysis() {
       try {
         const res = await fetch(`http://localhost:3001/api/status/${id}`);
         if (!res.ok) throw new Error("Status check failed");
-        
+
         const data = await res.json();
-        
+
         // Update current agent name from backend
         if (data.currentAgent) {
           setCurrentAgentName(data.currentAgent);
         }
 
+        // Extract progress messages
+        if (data.progressMessages && Array.isArray(data.progressMessages)) {
+          setProgressMessages(data.progressMessages);
+        }
+
+        // Extract negotiation messages
+        if (data.negotiationMessages && Array.isArray(data.negotiationMessages)) {
+          setNegotiationMessages(data.negotiationMessages);
+        }
+
+        // Update partial workflow state (sent during analysis too)
+        const partialState = data.workflowState || data.result?.workflowState;
+        if (partialState) {
+          setWorkflowState(partialState);
+        }
+
         if (data.status === "complete") {
           setStatus("complete");
-          
-          // Fix: workflowState might be at root level OR inside result, depending on backend structure
-          // Based on user feedback, it seems to be at root level or nested differently
-          const finalState = data.workflowState || data.result?.workflowState;
-          
-          if (finalState) {
-            setWorkflowState(finalState);
-          }
-          
           setResult(data.result);
           setCurrentAgentIndex(AGENT_DEFINITIONS.length); // All done
-          
+
           // Stop timers
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           if (visualTimerRef.current) clearInterval(visualTimerRef.current);
         } else if (data.status === "error") {
           setStatus("error");
           setError(data.error || "Unknown error");
-          
+
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           if (visualTimerRef.current) clearInterval(visualTimerRef.current);
-        } else {
-          // Update partial state if available
-          const partialState = data.workflowState || data.result?.workflowState;
-          if (partialState) {
-            setWorkflowState(partialState);
-          }
         }
       } catch (err) {
         console.error("Polling error:", err);
@@ -98,6 +118,8 @@ export function useAnalysis() {
     workflowState,
     result,
     error,
+    progressMessages,
+    negotiationMessages,
     startPolling
   };
 }

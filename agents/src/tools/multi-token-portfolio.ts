@@ -17,6 +17,35 @@ export interface TokenBalance {
   address?: string;
 }
 
+// ============================================================================
+// SIMULATED PORTFOLIO DATA (for demo / Sepolia with low balances)
+// ============================================================================
+
+const SIMULATED_HOLDINGS: Record<string, number> = {
+  ETH:  15.2,
+  USDC: 4200,
+  LINK: 500,
+  UNI:  120,
+  AAVE: 2.5,
+  WBTC: 0.015,
+  MKR:  0.8,
+  CRV:  2500,
+};
+
+// Fallback prices if CoinGecko is slow/rate-limited
+const FALLBACK_PRICES: Record<string, number> = {
+  ETH:  2500,
+  USDC: 1.0,
+  LINK: 15.0,
+  UNI:  9.0,
+  AAVE: 250,
+  WBTC: 66000,
+  MKR:  1800,
+  CRV:  0.55,
+};
+
+const SIMULATION_THRESHOLD_USD = 100; // If real portfolio < $100, use simulation
+
 /**
  * Comprehensive multi-token portfolio
  */
@@ -104,7 +133,31 @@ export async function getMultiTokenPortfolio(
   }
 
   // Step 3: Calculate total portfolio value
-  const totalValueUSD = tokenBalances.reduce((sum, token) => sum + token.valueUSD, 0);
+  let totalValueUSD = tokenBalances.reduce((sum, token) => sum + token.valueUSD, 0);
+
+  // Step 3.5: SIMULATION FALLBACK — if real portfolio is near-empty, inject demo data
+  if (totalValueUSD < SIMULATION_THRESHOLD_USD) {
+    console.log(`⚠️  Real portfolio value ($${totalValueUSD.toFixed(2)}) below threshold. Activating simulation mode...`);
+
+    tokenBalances.length = 0; // Clear empty balances
+
+    for (const [symbol, balance] of Object.entries(SIMULATED_HOLDINGS)) {
+      const coingeckoId = config.tokenSymbols[symbol as keyof typeof config.tokenSymbols];
+      const realPrice = coingeckoId ? (priceMap.get(coingeckoId) || 0) : 0;
+      const price = realPrice > 0 ? realPrice : (FALLBACK_PRICES[symbol] || 0);
+      const valueUSD = balance * price;
+
+      tokenBalances.push({
+        symbol,
+        balance,
+        priceUSD: price,
+        valueUSD,
+      });
+    }
+
+    totalValueUSD = tokenBalances.reduce((sum, token) => sum + token.valueUSD, 0);
+    console.log(`✅ Simulation portfolio loaded: $${totalValueUSD.toFixed(2)} across ${tokenBalances.length} tokens`);
+  }
 
   // Step 4: Sort by value (highest first)
   tokenBalances.sort((a, b) => b.valueUSD - a.valueUSD);

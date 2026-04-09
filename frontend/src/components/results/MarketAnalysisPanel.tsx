@@ -1,79 +1,104 @@
 "use client";
 
-import { GlowContainer } from "@/components/layout/GlowContainer";
 import { MarketAnalysis } from "@/lib/types";
 import { formatPercent } from "@/lib/utils";
-import { TrendingUp, AlertTriangle, CloudRain, Sun } from "lucide-react";
-import { NeonBadge } from "@/components/shared/NeonBadge";
 
 interface MarketAnalysisPanelProps {
   data: MarketAnalysis | null;
 }
+
+const trendColors: Record<string, string> = {
+  bullish: "bg-emerald-500/10 text-emerald-400",
+  bearish: "bg-red-500/10 text-red-400",
+  neutral: "bg-amber-500/10 text-amber-400",
+};
+
+const conditionColors: Record<string, string> = {
+  stable: "bg-emerald-500/10 text-emerald-400",
+  volatile: "bg-red-500/10 text-red-400",
+  uncertain: "bg-amber-500/10 text-amber-400",
+};
 
 export function MarketAnalysisPanel({ data }: MarketAnalysisPanelProps) {
   if (!data) return null;
 
   const { ethTrend, volatility, marketCondition, reasoning } = data;
 
-  const trendIcon = ethTrend === 'bullish' ? (
-    <Sun className="w-5 h-5 text-neon-green" />
-  ) : ethTrend === 'bearish' ? (
-    <CloudRain className="w-5 h-5 text-neon-blue" />
-  ) : (
-    <TrendingUp className="w-5 h-5 text-yellow-400" />
-  );
-
-  const volatilityColor = volatility > 50 ? "red" : volatility > 20 ? "orange" : "green";
-
   return (
-    <GlowContainer glowColor="blue" intensity="medium" className="h-full flex flex-col justify-between p-6">
-      
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-6 border-b border-neon-blue/20 pb-4">
-        <TrendingUp className="w-6 h-6 text-neon-blue" />
-        <h3 className="font-orbitron text-xl text-white tracking-wider">Market Intelligence</h3>
-      </div>
+    <div className="bg-[#222735] border border-[#334155] rounded-2xl p-6 h-full flex flex-col">
+      <h3 className="uppercase tracking-wider text-[#64748B] text-xs font-semibold mb-5">
+        Market Analysis
+      </h3>
 
-      <div className="flex-1 space-y-6">
-        {/* Stats Grid */}
+      <div className="flex-1 space-y-4">
+        {/* Badges grid */}
         <div className="grid grid-cols-2 gap-4">
-          
-          {/* Trend Section */}
-          <div className="space-y-2">
-            <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest block">ETH Trend</span>
-            <div className="flex items-center gap-2 bg-white/5 p-3 rounded-lg border border-white/10">
-              {trendIcon}
-              <span className={`text-base font-mono font-bold uppercase ${ethTrend === 'bullish' ? 'text-neon-green' : ethTrend === 'bearish' ? 'text-neon-blue' : 'text-yellow-400'}`}>
-                {ethTrend}
-              </span>
-            </div>
+          {/* ETH Trend */}
+          <div className="space-y-1.5">
+            <span className="text-xs text-[#64748B] uppercase tracking-wider block">
+              ETH Trend
+            </span>
+            <span
+              className={`inline-block rounded-lg px-3 py-1 text-sm font-medium capitalize ${
+                trendColors[ethTrend] || trendColors.neutral
+              }`}
+            >
+              {ethTrend}
+            </span>
           </div>
 
-          {/* Volatility Section */}
-          <div className="space-y-2">
-            <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest block">Volatility</span>
-            <div className="flex items-center gap-2 h-12">
-              <NeonBadge label={formatPercent(volatility)} color={volatilityColor as any} size="lg" />
-            </div>
+          {/* Volatility */}
+          <div className="space-y-1.5">
+            <span className="text-xs text-[#64748B] uppercase tracking-wider block">
+              Volatility
+            </span>
+            <span
+              className={`inline-block rounded-lg px-3 py-1 text-sm font-medium font-mono ${
+                volatility > 50
+                  ? "bg-red-500/10 text-red-400"
+                  : volatility > 20
+                  ? "bg-amber-500/10 text-amber-400"
+                  : "bg-emerald-500/10 text-emerald-400"
+              }`}
+            >
+              {formatPercent(volatility)}
+            </span>
           </div>
-        </div>
 
-        {/* Market Condition Badge */}
-        <div className="flex items-center justify-between text-xs text-zinc-500 font-mono uppercase tracking-widest pt-4 border-t border-white/5">
-          <span>Market State</span>
-          <span className={`px-3 py-1 rounded-full text-xs font-bold border ${marketCondition === 'volatile' ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-green-500/10 text-green-400 border-green-500/30'}`}>
-            {marketCondition.toUpperCase()}
-          </span>
+          {/* Market Condition */}
+          <div className="space-y-1.5">
+            <span className="text-xs text-[#64748B] uppercase tracking-wider block">
+              Market State
+            </span>
+            <span
+              className={`inline-block rounded-lg px-3 py-1 text-sm font-medium capitalize ${
+                conditionColors[marketCondition] || conditionColors.uncertain
+              }`}
+            >
+              {marketCondition}
+            </span>
+          </div>
+
+          {/* Sentiment / Recommendation */}
+          <div className="space-y-1.5">
+            <span className="text-xs text-[#64748B] uppercase tracking-wider block">
+              Sentiment
+            </span>
+            <span className="inline-block rounded-lg px-3 py-1 text-sm font-medium font-mono bg-violet-500/10 text-violet-400 capitalize">
+              {data.recommendation?.replace(/_/g, " ") || "N/A"}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Reasoning Footer */}
-      <div className="mt-6 pt-4 border-t border-neon-blue/20">
-        <p className="text-xs md:text-sm text-zinc-300 italic border-l-4 border-neon-blue/50 pl-4 py-2 bg-neon-blue/5 rounded-r-lg leading-relaxed font-mono">
-          "{reasoning}"
-        </p>
-      </div>
-
-    </GlowContainer>
+      {/* Reasoning */}
+      {reasoning && (
+        <div className="mt-5 pt-4 border-t border-[#334155]">
+          <p className="text-sm text-[#94A3B8] border-l-2 border-[#334155] pl-4 leading-relaxed">
+            {reasoning}
+          </p>
+        </div>
+      )}
+    </div>
   );
 }

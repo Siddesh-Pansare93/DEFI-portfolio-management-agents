@@ -1,12 +1,12 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, Suspense, useState } from "react";
+import { useEffect, Suspense } from "react";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { NavBar } from "@/components/layout/NavBar";
 import { AgentPipeline } from "@/components/agents/AgentPipeline";
-import { GlowContainer } from "@/components/layout/GlowContainer";
-import { Loader2, AlertCircle } from "lucide-react";
+import NegotiationChat from "@/components/agents/NegotiationChat";
+import { Loader2, AlertCircle, CheckCircle2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,19 +22,50 @@ import { ConfidenceMeter } from "@/components/charts/ConfidenceMeter";
 import { NashBargainingViz } from "@/components/charts/NashBargainingViz";
 import { PortfolioSnapshot } from "@/components/results/PortfolioSnapshot";
 import { MarketAnalysisPanel } from "@/components/results/MarketAnalysisPanel";
+import { TechnicalIndicatorsCard } from "@/components/results/TechnicalIndicatorsCard";
+import { NewsHeadlinesPanel } from "@/components/results/NewsHeadlinesPanel";
 import { WorkflowSummary } from "@/components/results/WorkflowSummary";
+import { TransactionStatus } from "@/components/results/TransactionStatus";
+import { BacktestPanel } from "@/components/results/BacktestPanel";
+
+function StatusBadge({ status }: { status: string }) {
+  if (status === "complete") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <CheckCircle2 className="w-3.5 h-3.5" />
+        Complete
+      </span>
+    );
+  }
+  if (status === "error") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+        <AlertCircle className="w-3.5 h-3.5" />
+        Error
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
+      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      Analyzing
+    </span>
+  );
+}
 
 function AnalyzeContent() {
   const searchParams = useSearchParams();
   const wallet = searchParams.get("wallet");
   const jobId = searchParams.get("job");
-  
-  const { 
-    status, 
-    workflowState, 
+
+  const {
+    status,
+    workflowState,
     error,
     currentAgentName,
-    startPolling 
+    progressMessages,
+    negotiationMessages,
+    startPolling,
   } = useAnalysis();
 
   const { data: hash, isPending: isTxPending, writeContract } = useWriteContract();
@@ -44,36 +75,39 @@ function AnalyzeContent() {
 
   const handleExecute = () => {
     if (!workflowState?.finalRecommendation) return;
-    
+
     // Check if address is placeholder
-    if (REBALANCE_LOGGER_ADDRESS === "0x1234567890123456789012345678901234567890") {
+    if (!REBALANCE_LOGGER_ADDRESS || REBALANCE_LOGGER_ADDRESS.length < 42) {
       toast.warning("Simulation Mode", {
         description: "Contract address is not configured. Execution simulated.",
       });
       return;
     }
 
-    writeContract({
-      address: REBALANCE_LOGGER_ADDRESS as `0x${string}`,
-      abi: REBALANCE_LOGGER_ABI,
-      functionName: "logRebalance",
-      args: [
-        workflowState.finalRecommendation.action,
-        BigInt(0),
-      ],
-    }, {
-      onError: (err) => {
-        toast.error("Execution Failed", {
-          description: err.message
-        });
+    writeContract(
+      {
+        address: REBALANCE_LOGGER_ADDRESS as `0x${string}`,
+        abi: REBALANCE_LOGGER_ABI,
+        functionName: "logRecommendation",
+        args: [
+          workflowState.finalRecommendation.action,
+          JSON.stringify(workflowState.finalRecommendation.details || {}),
+        ],
+      },
+      {
+        onError: (err) => {
+          toast.error("Execution Failed", {
+            description: err.message,
+          });
+        },
       }
-    });
+    );
   };
 
   useEffect(() => {
     if (isConfirmed) {
       toast.success("Transaction Confirmed!", {
-        description: "Strategy execution logged on-chain."
+        description: "Strategy execution logged on-chain.",
       });
     }
   }, [isConfirmed]);
@@ -87,129 +121,178 @@ function AnalyzeContent() {
 
   if (!wallet || !jobId) {
     return (
-      <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-bg-void text-white">
-        <h1 className="text-xl text-red-500 font-mono">Invalid Request</h1>
+      <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-[#0F172A] text-white">
+        <AlertCircle className="w-10 h-10 text-red-400" />
+        <h1 className="text-xl text-red-400 font-medium">Invalid Request</h1>
+        <p className="text-[#94A3B8] text-sm">Missing wallet address or job ID.</p>
         <Link href="/">
-          <Button variant="outline">Return Home</Button>
+          <Button variant="outline" className="border-[#334155] text-[#94A3B8] hover:bg-[#222735] hover:text-white">
+            Return Home
+          </Button>
         </Link>
       </div>
     );
   }
 
-  const showResults = (status === "complete" || (status === "analyzing" && !!workflowState?.finalRecommendation));
+  const latestProgress =
+    progressMessages.length > 0 ? progressMessages[progressMessages.length - 1] : null;
+
+  const showResults =
+    status === "complete" ||
+    (status === "analyzing" && !!workflowState?.finalRecommendation);
 
   return (
-    <div className="min-h-screen pb-20 bg-bg-void overflow-x-hidden">
+    <div className="min-h-screen pb-20 bg-[#0F172A] overflow-x-hidden">
       <NavBar />
-      
-      <main className="container mx-auto px-4 pt-24 space-y-12">
-        {/* Header Section */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className={`w-2 h-2 rounded-full ${status === "complete" ? "bg-neon-green" : "bg-neon-cyan animate-pulse"}`} />
-              <span className={`text-xs font-mono tracking-widest uppercase ${status === "complete" ? "text-neon-green" : "text-neon-cyan"}`}>
-                {status === "complete" ? "ANALYSIS COMPLETE" : "LIVE ANALYSIS IN PROGRESS"}
-              </span>
+
+      <main className="container mx-auto px-4 pt-24 space-y-10">
+        {/* ── Header ── */}
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <StatusBadge status={status} />
+              <h1 className="text-2xl md:text-3xl font-semibold text-white tracking-tight">
+                Agent Pipeline
+              </h1>
             </div>
-            <h1 className="text-3xl md:text-4xl font-bold font-orbitron text-white">
-              Agent Pipeline Theater
-            </h1>
-            <p className="text-zinc-400 mt-1 font-mono text-sm">
-              Target: <span className="text-white bg-white/10 px-2 py-0.5 rounded ml-1">{wallet}</span>
+            <p className="text-[#64748B] text-sm">
+              Wallet{" "}
+              <span className="text-[#94A3B8] bg-[#1E293B] px-2 py-0.5 rounded font-mono text-xs ml-1">
+                {wallet}
+              </span>
             </p>
           </div>
 
-          <div className="flex items-center gap-4">
-             {status === "analyzing" && (
-                <div className="flex items-center gap-2 text-neon-cyan/80 text-sm font-mono animate-pulse bg-neon-cyan/10 px-3 py-1 rounded-full border border-neon-cyan/20">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  PROCESSING
-                </div>
-             )}
-             {status === "error" && (
-                <div className="flex items-center gap-2 text-red-500 text-sm font-mono bg-red-500/10 px-3 py-1 rounded-full border border-red-500/20">
-                  <AlertCircle className="w-4 h-4" />
-                  SYSTEM ERROR
-                </div>
-             )}
-          </div>
+          {status === "analyzing" && (
+            <div className="flex items-center gap-2 text-blue-400/80 text-sm">
+              <Zap className="w-4 h-4" />
+              <span>Processing agents...</span>
+            </div>
+          )}
         </div>
 
-        {/* Error Display */}
+        {/* ── Error Display ── */}
         {error && (
-          <GlowContainer glowColor="orange" intensity="high" className="bg-red-950/20 border-red-500/50">
-             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-red-400">
-               <div className="flex items-center gap-4">
-                 <AlertCircle className="w-6 h-6 shrink-0" />
-                 <div>
-                   <h3 className="font-bold">Execution Failed</h3>
-                   <p className="text-sm font-mono opacity-80">{error}</p>
-                 </div>
-               </div>
-               <Button 
-                 variant="outline" 
-                 size="sm" 
-                 className="border-red-500/50 text-red-400 hover:bg-red-500/10 hover:text-red-300 w-full md:w-auto"
-                 onClick={() => window.location.reload()}
-               >
-                 Retry Analysis
-               </Button>
-             </div>
-          </GlowContainer>
+          <div className="bg-[#222735] border border-red-500/30 rounded-2xl p-5">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4 text-red-400">
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-sm text-red-400">Execution Failed</h3>
+                  <p className="text-sm text-[#94A3B8] mt-0.5">{error}</p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300 w-full md:w-auto"
+                onClick={() => window.location.reload()}
+              >
+                Retry Analysis
+              </Button>
+            </div>
+          </div>
         )}
 
-        {/* Main Pipeline Visualization */}
-        <div className="py-8">
-          <AgentPipeline status={status} workflowState={workflowState} currentAgentName={currentAgentName} />
-        </div>
+        {/* ── Agent Pipeline ── */}
+        <section>
+          <AgentPipeline
+            status={status}
+            workflowState={workflowState}
+            currentAgentName={currentAgentName}
+          />
+        </section>
 
-        {/* Results Section */}
+        {/* ── Latest Progress Message ── */}
+        {latestProgress && status === "analyzing" && (
+          <div className="text-sm text-[#94A3B8] font-mono">
+            <span className="text-[#64748B]">[{latestProgress.agent}]</span>{" "}
+            {latestProgress.message}
+          </div>
+        )}
+
+        {/* ── Negotiation Chat ── */}
+        {negotiationMessages.length > 0 && (
+          <section>
+            <NegotiationChat messages={negotiationMessages} status={status} />
+          </section>
+        )}
+
+        {/* ── Results Section ── */}
         <AnimatePresence>
           {showResults && workflowState && (
-            <motion.div 
+            <motion.div
               key="results-container"
-              initial={{ opacity: 0, y: 100 }}
+              initial={{ opacity: 0, y: 60 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 100 }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
+              exit={{ opacity: 0, y: 60 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
               className="space-y-8"
             >
               {/* Divider */}
-              <div className="border-t border-white/10 pt-12 flex items-center justify-center">
-                <div className="bg-bg-void px-4 -mt-14 text-zinc-500 font-mono text-sm uppercase tracking-widest">
+              <div className="relative border-t border-[#334155] pt-10">
+                <div className="absolute left-1/2 -translate-x-1/2 -top-3 bg-[#0F172A] px-4 text-[#64748B] text-xs uppercase tracking-widest">
                   Strategic Output
                 </div>
               </div>
 
               {/* 1. Final Recommendation Card */}
-              <FinalRecommendationCard 
-                recommendation={workflowState.finalRecommendation!} 
+              <FinalRecommendationCard
+                recommendation={workflowState.finalRecommendation!}
                 onExecute={handleExecute}
                 isExecuting={isTxPending || isConfirming}
               />
 
-              {/* 2. Charts Grid */}
+              {/* Transaction Status */}
+              <TransactionStatus
+                hash={hash}
+                isPending={isTxPending}
+                isConfirming={isConfirming}
+                isConfirmed={isConfirmed}
+              />
+
+              {/* 2. Charts Grid - 4 cols on lg, 2 on md, 1 on sm */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 min-h-[350px]">
                 <PortfolioDonut data={workflowState.portfolio} />
                 <RiskGauge score={workflowState.riskValidation?.riskScore || 0} />
-                <NashBargainingViz 
-                  safetyUtility={1 - (workflowState.riskValidation?.riskScore || 0)} // Inverse of risk
-                  returnUtility={workflowState.strategyProposal?.expectedAPY ? Math.min(workflowState.strategyProposal.expectedAPY * 5, 1) : 0} // Normalize APY roughly
+                <NashBargainingViz
+                  safetyUtility={1 - (workflowState.riskValidation?.riskScore || 0)}
+                  returnUtility={
+                    workflowState.strategyProposal?.expectedAPY
+                      ? Math.min(workflowState.strategyProposal.expectedAPY * 5, 1)
+                      : 0
+                  }
                   disagreementPoint={{ x: 0.2, y: 0.1 }}
                 />
                 <ConfidenceMeter confidence={workflowState.finalRecommendation!.confidence} />
               </div>
 
-              {/* 3. Detailed Panels */}
+              {/* 3. Portfolio Snapshot + Market Analysis */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <PortfolioSnapshot data={workflowState.portfolio} />
                 <MarketAnalysisPanel data={workflowState.marketAnalysis} />
               </div>
 
-              {/* 4. Full Trace Accordion */}
-              <WorkflowSummary state={workflowState} />
+              {/* 4. Technical Indicators + News Headlines */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <TechnicalIndicatorsCard
+                  data={(workflowState as any).technicalIndicators ?? null}
+                />
+                <NewsHeadlinesPanel
+                  headlines={(workflowState as any).newsHeadlines ?? null}
+                />
+              </div>
 
+              {/* 5. Backtesting Panel */}
+              {workflowState.finalRecommendation && (
+                <BacktestPanel
+                  portfolioValue={workflowState.portfolio?.totalValueUSD || 52000}
+                  expectedAPY={workflowState.finalRecommendation.expectedAPY || 0.085}
+                />
+              )}
+
+              {/* 6. Workflow Summary */}
+              <WorkflowSummary state={workflowState} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -220,11 +303,13 @@ function AnalyzeContent() {
 
 export default function AnalyzePage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-bg-void">
-        <Loader2 className="w-8 h-8 text-neon-cyan animate-spin" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-[#0F172A]">
+          <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+        </div>
+      }
+    >
       <AnalyzeContent />
     </Suspense>
   );

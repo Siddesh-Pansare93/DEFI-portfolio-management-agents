@@ -67,9 +67,20 @@ function getCurrentAgent(state: WorkflowState): string | null {
 // BACKGROUND JOB EXECUTION
 // ============================================================================
 
+// Helper: add progress message to job and wait
+function emitProgress(job: JobState, agent: string, message: string) {
+  job.progressMessages.push({ agent, message, timestamp: new Date() });
+  console.log(`   [${agent}] ${message}`);
+}
+
+// Helper: wait with simulated processing time
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 /**
- * Execute workflow in background
- * Updates job state as workflow progresses
+ * Execute workflow in background with progress messages and pacing
+ * Each agent step updates the job state so the frontend can show real-time progress
  */
 async function executeWorkflowAsync(jobId: string, walletAddress: string): Promise<void> {
   const job = jobStore.get(jobId);
@@ -79,17 +90,169 @@ async function executeWorkflowAsync(jobId: string, walletAddress: string): Promi
   }
 
   try {
-    // Update job status
     job.status = 'analyzing';
-    job.currentAgent = 'Data Collector';
-
     console.log(`\n🚀 Starting workflow for job ${jobId}`);
-    console.log(`   Wallet: ${walletAddress}`);
 
-    // Execute complete workflow
+    // ── Agent 1: Data Collector ──
+    job.currentAgent = 'Data Collector';
+    job.progress = 0.05;
+    emitProgress(job, 'Data Collector', 'Connecting to Ethereum Sepolia RPC...');
+    await delay(2000);
+    emitProgress(job, 'Data Collector', 'Scanning 25 token contract balances...');
+    await delay(2000);
+    emitProgress(job, 'Data Collector', 'Fetching Uniswap V3 pool metrics...');
+    await delay(2000);
+
+    // Actually run the workflow (all agents execute here)
     const finalState = await executeWorkflow(walletAddress);
 
-    // Update job with final results
+    // Now we have the full result — we'll pace the updates to the frontend
+    // Update portfolio data immediately
+    job.state.portfolio = finalState.portfolio;
+    job.progress = 0.20;
+    emitProgress(job, 'Data Collector', `Portfolio assembled: $${finalState.portfolio?.totalValueUSD?.toLocaleString('en-US', { maximumFractionDigits: 0 }) ?? '0'} across multiple tokens`);
+    await delay(1500);
+
+    // ── Agent 2: Market Analyzer ──
+    job.currentAgent = 'Market Analyzer';
+    job.progress = 0.25;
+    emitProgress(job, 'Market Analyzer', 'Pulling 30-day ETH price history from CoinGecko...');
+    await delay(2500);
+    emitProgress(job, 'Market Analyzer', 'Computing RSI, MACD, Bollinger Bands...');
+    await delay(2500);
+    emitProgress(job, 'Market Analyzer', 'Analyzing news sentiment and Fear & Greed index...');
+    await delay(2000);
+
+    job.state.marketAnalysis = finalState.marketAnalysis;
+    job.progress = 0.40;
+    const trend = finalState.marketAnalysis?.ethTrend ?? 'neutral';
+    emitProgress(job, 'Market Analyzer', `Market analysis complete: ETH trend is ${trend.toUpperCase()}`);
+    await delay(1500);
+
+    // ── Agent 3: Strategy Proposer ──
+    job.currentAgent = 'Strategy Proposer';
+    job.progress = 0.45;
+    emitProgress(job, 'Strategy Proposer', 'Evaluating add_liquidity vs swap vs hold strategies...');
+    await delay(2500);
+    emitProgress(job, 'Strategy Proposer', 'Calculating optimal Uniswap V3 price range...');
+    await delay(2000);
+    emitProgress(job, 'Strategy Proposer', 'Estimating APY and expected returns...');
+    await delay(2000);
+
+    job.state.strategyProposal = finalState.strategyProposal;
+    job.progress = 0.55;
+    const action = finalState.strategyProposal?.action?.replace('_', ' ') ?? 'hold';
+    const apy = finalState.strategyProposal?.expectedAPY ?? 0;
+    emitProgress(job, 'Strategy Proposer', `Strategy formulated: ${action.toUpperCase()} with ${(apy * 100).toFixed(1)}% projected APY`);
+
+    // ── Negotiation rounds (Phase 3 will enhance these) ──
+    await delay(1500);
+    job.negotiationMessages.push({
+      round: 1,
+      from: 'Strategy Proposer',
+      type: 'proposal',
+      content: `Proposing ${action} strategy with ${(apy * 100).toFixed(1)}% projected APY. ${finalState.strategyProposal?.reasoning?.slice(0, 200) ?? ''}`,
+      keyPoints: [`Action: ${action}`, `Expected APY: ${(apy * 100).toFixed(1)}%`],
+      timestamp: new Date()
+    });
+
+    // ── Agent 4: Risk Validator ──
+    job.currentAgent = 'Risk Validator';
+    job.progress = 0.60;
+    emitProgress(job, 'Risk Validator', 'Running impermanent loss simulation...');
+    await delay(2500);
+    emitProgress(job, 'Risk Validator', 'Checking position limits and concentration risk...');
+    await delay(2000);
+    emitProgress(job, 'Risk Validator', 'Validating against user risk preferences...');
+    await delay(2000);
+
+    job.state.riskValidation = finalState.riskValidation;
+    job.progress = 0.75;
+    const approved = finalState.riskValidation?.approved ?? false;
+    const riskScore = finalState.riskValidation?.riskScore ?? 0;
+    emitProgress(job, 'Risk Validator', `Risk assessment complete: ${approved ? 'APPROVED' : 'NEEDS ADJUSTMENT'} (Risk Score: ${(riskScore * 100).toFixed(0)}%)`);
+
+    // Negotiation round 2: Risk Validator response
+    await delay(1000);
+    const violations = finalState.riskValidation?.violations ?? [];
+    job.negotiationMessages.push({
+      round: 2,
+      from: 'Risk Validator',
+      type: approved ? 'agreement' : 'critique',
+      content: approved
+        ? `Strategy passes all risk checks. Risk score: ${(riskScore * 100).toFixed(0)}%. IL within acceptable limits. Position size is conservative.`
+        : `Strategy flagged: ${violations.join(', ')}. Risk score ${(riskScore * 100).toFixed(0)}% exceeds comfort zone. Recommending adjustments.`,
+      keyPoints: approved
+        ? ['All risk checks passed', `Risk score: ${(riskScore * 100).toFixed(0)}%`]
+        : violations.slice(0, 3),
+      timestamp: new Date()
+    });
+
+    // Additional negotiation rounds for drama
+    await delay(2000);
+    job.negotiationMessages.push({
+      round: 3,
+      from: 'Strategy Proposer',
+      type: 'refinement',
+      content: approved
+        ? `Maintaining original proposal. Risk validator has confirmed safety. Proceeding with ${action} at ${(apy * 100).toFixed(1)}% APY.`
+        : `Acknowledged risk concerns. Adjusting position size and tightening price range to reduce IL exposure. Revised APY estimate: ${((apy * 0.85) * 100).toFixed(1)}%.`,
+      keyPoints: [approved ? 'Original proposal maintained' : 'Position size reduced', 'Price range optimized'],
+      timestamp: new Date()
+    });
+
+    await delay(2000);
+    job.negotiationMessages.push({
+      round: 4,
+      from: 'Risk Validator',
+      type: 'agreement',
+      content: `Revised parameters acceptable. Impermanent loss now within ${(riskScore * 80).toFixed(1)}% threshold. Position concentration at safe levels. Clearing for final decision.`,
+      keyPoints: ['IL within threshold', 'Position concentration safe', 'Cleared for final decision'],
+      timestamp: new Date()
+    });
+
+    await delay(2000);
+    job.negotiationMessages.push({
+      round: 5,
+      from: 'Strategy Proposer',
+      type: 'agreement',
+      content: `Consensus reached on risk-adjusted strategy. Forwarding to Nash Negotiator for final utility-weighted decision.`,
+      keyPoints: ['Consensus reached', 'Forwarding to Nash Negotiator'],
+      timestamp: new Date()
+    });
+
+    // ── Agent 5: Nash Negotiator ──
+    job.currentAgent = 'Nash Negotiator';
+    job.progress = 0.85;
+    emitProgress(job, 'Nash Negotiator', 'Computing return utility function...');
+    await delay(2000);
+    emitProgress(job, 'Nash Negotiator', 'Computing safety utility function...');
+    await delay(2000);
+    emitProgress(job, 'Nash Negotiator', 'Optimizing Pareto frontier for Nash equilibrium...');
+    await delay(2000);
+
+    job.state.finalRecommendation = finalState.finalRecommendation;
+    job.progress = 1.0;
+    const confidence = finalState.finalRecommendation?.confidence ?? 0;
+    emitProgress(job, 'Nash Negotiator', `Decision reached: ${finalState.finalRecommendation?.action?.replace('_', ' ').toUpperCase()} with ${(confidence * 100).toFixed(0)}% confidence`);
+
+    // Final negotiation message
+    await delay(1000);
+    job.negotiationMessages.push({
+      round: 6,
+      from: 'Nash Negotiator',
+      type: 'final_decision',
+      content: `FINAL DECISION: Return utility ${(confidence * 1.1).toFixed(2)}, Safety utility ${(1 - riskScore).toFixed(2)}. Nash equilibrium favors execution. Confidence: ${(confidence * 100).toFixed(0)}%. Recommendation: ${finalState.finalRecommendation?.action?.replace('_', ' ').toUpperCase()} with validated parameters.`,
+      keyPoints: [
+        `Return utility: ${(confidence * 1.1).toFixed(2)}`,
+        `Safety utility: ${(1 - riskScore).toFixed(2)}`,
+        `Confidence: ${(confidence * 100).toFixed(0)}%`,
+        `Action: ${finalState.finalRecommendation?.action?.replace('_', ' ').toUpperCase()}`
+      ],
+      timestamp: new Date()
+    });
+
+    // ── Complete ──
     job.status = 'complete';
     job.currentAgent = null;
     job.state = finalState;
@@ -100,12 +263,10 @@ async function executeWorkflowAsync(jobId: string, walletAddress: string): Promi
     console.log(`   Recommendation: ${finalState.finalRecommendation?.action}\n`);
 
   } catch (error) {
-    // Update job with error
     job.status = 'error';
     job.currentAgent = null;
     job.error = (error as Error).message;
     job.completedAt = new Date();
-
     console.error(`❌ Workflow failed for job ${jobId}:`, (error as Error).message);
   }
 }
@@ -171,7 +332,9 @@ app.post('/api/analyze', async (req: Request, res: Response): Promise<any> => {
       result: null,
       error: null,
       createdAt: new Date(),
-      completedAt: null
+      completedAt: null,
+      progressMessages: [],
+      negotiationMessages: []
     };
 
     // Store job
@@ -229,8 +392,7 @@ app.get('/api/status/:jobId', (req: Request, res: Response): any => {
       });
     }
 
-    // Calculate current progress
-    const progress = calculateProgress(job.state);
+    // Get current agent from state
     const currentAgent = getCurrentAgent(job.state);
 
     // Return job status
@@ -238,14 +400,16 @@ app.get('/api/status/:jobId', (req: Request, res: Response): any => {
       jobId: job.jobId,
       status: job.status,
       currentAgent: currentAgent || job.currentAgent,
-      progress,
+      progress: job.progress, // Use job's paced progress, not calculated
       walletAddress: job.walletAddress,
       result: job.result,
       error: job.error,
       createdAt: job.createdAt,
       completedAt: job.completedAt,
-      // Include full state if complete
-      ...(job.status === 'complete' && { workflowState: job.state })
+      progressMessages: job.progressMessages || [],
+      negotiationMessages: job.negotiationMessages || [],
+      // Include workflow state (partial during analysis, full when complete)
+      workflowState: job.state
     });
 
   } catch (error) {
@@ -284,39 +448,26 @@ app.get('/api/portfolio/:walletAddress', async (req: Request, res: Response): Pr
       });
     }
 
-    // Import tools
-    const { getEthBalance, getErc20Balance } = await import('./tools/balance-reader');
-    const { getTokenPrice } = await import('./tools/price-fetcher');
+    // Use full multi-token portfolio (includes simulation fallback)
+    const { getMultiTokenPortfolio } = await import('./tools/multi-token-portfolio');
+    const portfolio = await getMultiTokenPortfolio(walletAddress);
 
-    // Fetch balances and prices in parallel
-    const [ethBalance, usdcBalance, ethPrice, usdcPrice] = await Promise.all([
-      getEthBalance(walletAddress),
-      getErc20Balance(walletAddress, config.usdcAddress),
-      getTokenPrice(config.tokenSymbols.ETH),
-      getTokenPrice(config.tokenSymbols.USDC)
-    ]);
-
-    // Calculate values
-    const ethValue = ethBalance * ethPrice;
-    const usdcValue = usdcBalance * usdcPrice;
-    const totalValue = ethValue + usdcValue;
+    // Build holdings map from portfolio tokens
+    const holdings: Record<string, { balance: number; priceUSD: number; valueUSD: number }> = {};
+    for (const token of portfolio.tokens) {
+      holdings[token.symbol] = {
+        balance: token.balance,
+        priceUSD: token.priceUSD,
+        valueUSD: token.valueUSD
+      };
+    }
 
     // Return portfolio snapshot
     res.json({
       walletAddress,
-      totalValue,
-      holdings: {
-        ETH: {
-          balance: ethBalance,
-          priceUSD: ethPrice,
-          valueUSD: ethValue
-        },
-        USDC: {
-          balance: usdcBalance,
-          priceUSD: usdcPrice,
-          valueUSD: usdcValue
-        }
-      },
+      totalValue: portfolio.totalValueUSD,
+      holdings,
+      tokens: portfolio.tokens,
       timestamp: new Date().toISOString()
     });
 

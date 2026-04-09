@@ -228,4 +228,29 @@ export interface LogRecommendationResponse {
  */
 export interface AnalyzeRequest {
   walletAddress: string;
+  preferences?: Partial<UserPreferences>;
+}
+
+// ============================================================================
+// USER PREFERENCES TYPES
+// ============================================================================
+
+export interface UserPreferences {
+  maxImpermanentLoss: number;
+  maxPositionSize: number;
+  riskAppetite: 'conservative' | 'moderate' | 'aggressive';
+  preferredActions: ('add_liquidity' | 'swap' | 'hold')[];
+}
+
+// ============================================================================
+// MARKET OVERVIEW TYPES
+// ============================================================================
+
+export interface MarketOverviewResponse {
+  fearGreedIndex: number;
+  fearGreedLabel: string;
+  ethPrice: number;
+  uniswapTVL: number;
+  topTokenPrices: Record<string, number>;
+  timestamp: string;
 }

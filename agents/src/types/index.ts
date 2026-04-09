@@ -149,6 +149,21 @@ export type JobStatus = 'pending' | 'analyzing' | 'complete' | 'error';
 /**
  * Job state for in-memory job tracking
  */
+export interface ProgressMessage {
+  agent: string;
+  message: string;
+  timestamp: Date;
+}
+
+export interface NegotiationMessage {
+  round: number;
+  from: string;
+  type: 'proposal' | 'critique' | 'refinement' | 'agreement' | 'final_decision';
+  content: string;
+  keyPoints: string[];
+  timestamp: Date;
+}
+
 export interface JobState {
   jobId: string;
   walletAddress: string;
@@ -160,6 +175,8 @@ export interface JobState {
   error: string | null;
   createdAt: Date;                // When job was created
   completedAt: Date | null;       // When job finished (null if still running)
+  progressMessages: ProgressMessage[];      // Real-time progress updates
+  negotiationMessages: NegotiationMessage[]; // Negotiation round messages
 }
 
 // ============================================================================

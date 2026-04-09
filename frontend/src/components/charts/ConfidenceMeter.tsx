@@ -1,41 +1,39 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { GlowContainer } from "@/components/layout/GlowContainer";
-import { cn, formatPercent } from "@/lib/utils";
-
 interface ConfidenceMeterProps {
   confidence: number; // 0-1
 }
 
 export function ConfidenceMeter({ confidence }: ConfidenceMeterProps) {
-  const percentage = confidence * 100;
-  
+  const percentage = Math.round(confidence * 100);
+  const clampedHeight = Math.max(0, Math.min(100, percentage));
+
   return (
-    <GlowContainer glowColor="purple" intensity="low" className="flex flex-col items-center p-6 h-full">
-      <h3 className="font-orbitron text-lg text-white mb-4 tracking-wider">AI Confidence</h3>
-      
-      <div className="w-16 h-40 bg-white/10 rounded-full relative overflow-hidden flex items-end">
-        <motion.div
-          className={cn("w-full bg-gradient-to-t from-neon-purple to-neon-blue rounded-b-full transition-all duration-1000",
-            confidence > 0.8 ? "shadow-[0_0_20px_#aa00ff]" : ""
-          )}
-          initial={{ height: 0 }}
-          animate={{ height: `${percentage}%` }}
-        />
-        
-        {/* Animated bubbles */}
-        <motion.div 
-          className="absolute inset-0 bg-[url('/scanlines.png')] opacity-20 pointer-events-none mix-blend-overlay" 
-          animate={{ backgroundPosition: ["0% 0%", "0% 100%"] }}
-          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-        />
+    <div className="bg-[#222735] border border-[#334155] rounded-2xl p-5">
+      <h3 className="text-xs font-medium uppercase tracking-wider text-[#64748B] mb-4">
+        Confidence
+      </h3>
+
+      <div className="flex flex-col items-center">
+        {/* Percentage text */}
+        <div className="font-mono text-2xl font-bold text-white mb-3">
+          {percentage}%
+        </div>
+
+        {/* Vertical progress bar */}
+        <div className="w-14 h-40 bg-[#1A1F2E] rounded-lg relative overflow-hidden border border-[#334155]">
+          <div
+            className="absolute bottom-0 left-0 right-0 rounded-b-lg transition-all duration-700 ease-out"
+            style={{
+              height: `${clampedHeight}%`,
+              background: "linear-gradient(to top, #8B5CF6, #F59E0B)",
+            }}
+          />
+        </div>
+
+        {/* Label */}
+        <div className="text-xs text-[#64748B] mt-3">Confidence</div>
       </div>
-      
-      <div className="mt-4 text-center">
-        <div className="text-2xl font-bold font-mono text-neon-purple">{formatPercent(confidence)}</div>
-        <div className="text-xs text-zinc-500 font-mono uppercase tracking-widest mt-1">Probability</div>
-      </div>
-    </GlowContainer>
+    </div>
   );
 }

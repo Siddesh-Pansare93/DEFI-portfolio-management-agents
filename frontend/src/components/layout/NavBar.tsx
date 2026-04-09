@@ -2,73 +2,87 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
-
-import { WalletConnect } from "@/components/wallet/WalletConnect";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { Loader2, Wallet } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function NavBar() {
   const [isBackendHealthy, setIsBackendHealthy] = useState<boolean>(false);
-  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+
+  const { address, isConnected } = useAccount();
+  const { connect, connectors, isPending } = useConnect();
+  const { disconnect } = useDisconnect();
+
+  const formatAddress = (addr: string) =>
+    `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
+
+  const handleConnect = () => {
+    const connector =
+      connectors.find((c) => c.id === "injected") || connectors[0];
+    if (connector) {
+      connect({ connector });
+    }
+  };
 
   useEffect(() => {
     const checkHealth = async () => {
       try {
         const res = await fetch("http://localhost:3001/health");
-        if (res.ok) {
-          setIsBackendHealthy(true);
-        } else {
-          setIsBackendHealthy(false);
-        }
-        setLastChecked(new Date());
-      } catch (error) {
+        setIsBackendHealthy(res.ok);
+      } catch {
         setIsBackendHealthy(false);
       }
     };
 
-    // Initial check
     checkHealth();
-
-    // Poll every 30 seconds
     const interval = setInterval(checkHealth, 30000);
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-black/50 backdrop-blur-md">
-      <div className="container mx-auto flex items-center justify-between h-16 px-4">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 font-mono tracking-tighter text-xl font-bold text-white hover:text-neon-cyan transition-colors">
-          <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse shadow-[0_0_10px_#00ffff]" />
-          AUTONOMOUS.DEFI
+    <nav className="fixed top-0 left-0 right-0 z-50 h-16 bg-[#0F172A]/80 backdrop-blur-xl border-b border-white/[0.08]">
+      <div className="max-w-7xl mx-auto px-6 h-full flex items-center justify-between">
+        {/* Left: Logo */}
+        <Link href="/" className="flex items-center gap-2.5">
+          <span className="font-sans font-semibold text-lg text-white">
+            Autonomous DeFi
+          </span>
+          <span className="text-[#334155] text-sm select-none">&middot;</span>
+          <span className="text-[#94A3B8] text-sm">AI Agents</span>
         </Link>
 
-        {/* Status Indicators */}
-        <div className="flex items-center gap-6">
-          <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground font-mono">
-            <span>SYSTEM STATUS:</span>
-            <div className="flex items-center gap-1.5">
-              <div 
-                className={cn(
-                  "w-2 h-2 rounded-full transition-colors duration-500",
-                  isBackendHealthy ? "bg-neon-green shadow-[0_0_8px_#00ff88]" : "bg-red-500 shadow-[0_0_8px_#ef4444]"
-                )} 
-              />
-              <span className={isBackendHealthy ? "text-neon-green" : "text-red-500"}>
-                {isBackendHealthy ? "ONLINE" : "OFFLINE"}
-              </span>
-            </div>
-          </div>
-          
-          <div className="h-4 w-[1px] bg-white/10 hidden md:block" />
-          
-          <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground hidden sm:flex">
-             <span>NETWORK: SEPOLIA</span>
-             <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_#a855f7]" />
-          </div>
-          
-          <div className="h-4 w-[1px] bg-white/10 hidden sm:block" />
+        {/* Right: Wallet + Health */}
+        <div className="flex items-center gap-3">
+          {isConnected && address ? (
+            <button
+              onClick={() => disconnect()}
+              className="font-mono text-sm text-[#94A3B8] bg-[#222735] border border-[#334155] rounded-lg px-3 py-1.5 hover:border-[#475569] transition-colors cursor-pointer"
+            >
+              {formatAddress(address)}
+            </button>
+          ) : (
+            <Button
+              variant="default"
+              className="bg-[#222735] border border-[#334155] text-white hover:bg-[#2a3040] text-sm rounded-lg px-3 py-1.5 transition-colors"
+              disabled={isPending}
+              onClick={handleConnect}
+            >
+              {isPending ? (
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Wallet className="w-3.5 h-3.5 mr-1.5" />
+              )}
+              {isPending ? "Connecting..." : "Connect Wallet"}
+            </Button>
+          )}
 
-          <WalletConnect />
+          {/* Health indicator dot */}
+          <div
+            className={`w-2 h-2 rounded-full shrink-0 ${
+              isBackendHealthy ? "bg-emerald-400" : "bg-red-400"
+            }`}
+            title={isBackendHealthy ? "Backend online" : "Backend offline"}
+          />
         </div>
       </div>
     </nav>

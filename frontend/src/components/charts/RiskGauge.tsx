@@ -1,75 +1,85 @@
 "use client";
 
-import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from "recharts";
-import { GlowContainer } from "@/components/layout/GlowContainer";
-import { cn } from "@/lib/utils";
-
 interface RiskGaugeProps {
   score: number; // 0-1
 }
 
 export function RiskGauge({ score }: RiskGaugeProps) {
-  const percentage = score * 100;
-  
-  // Determine color based on risk level
-  const getColor = () => {
-    if (score < 0.3) return "#00ff88"; // Green (Safe)
-    if (score < 0.7) return "#ff6600"; // Orange (Medium)
-    return "#ff0000"; // Red (High Risk)
-  };
+  const percentage = Math.round(score * 100);
+  const clampedScore = Math.max(0, Math.min(1, score));
 
-  const chartData = [
-    { name: "Risk", value: percentage, fill: getColor() },
-  ];
+  // Semicircle SVG gauge
+  const radius = 70;
+  const strokeWidth = 12;
+  const cx = 100;
+  const cy = 90;
+
+  // Arc from 180 degrees (left) to 0 degrees (right)
+  const startAngle = Math.PI;
+  const endAngle = 0;
+  const sweepAngle = startAngle - (startAngle - endAngle) * clampedScore;
+
+  const arcStartX = cx + radius * Math.cos(startAngle);
+  const arcStartY = cy - radius * Math.sin(startAngle);
+  const arcEndX = cx + radius * Math.cos(sweepAngle);
+  const arcEndY = cy - radius * Math.sin(sweepAngle);
+
+  const bgArcEndX = cx + radius * Math.cos(endAngle);
+  const bgArcEndY = cy - radius * Math.sin(endAngle);
+
+  const largeArcFlag = clampedScore > 0.5 ? 1 : 0;
+
+  const bgPath = `M ${arcStartX} ${arcStartY} A ${radius} ${radius} 0 1 1 ${bgArcEndX} ${bgArcEndY}`;
+  const fillPath =
+    clampedScore > 0
+      ? `M ${arcStartX} ${arcStartY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${arcEndX} ${arcEndY}`
+      : "";
 
   return (
-    <GlowContainer glowColor="orange" intensity="medium" className="flex flex-col items-center p-6 h-full">
-      <h3 className="font-orbitron text-lg text-white mb-4 tracking-wider">Risk Level</h3>
-      
-      <div className="w-full h-[200px] relative flex justify-center items-center">
-        <ResponsiveContainer width="100%" height="100%">
-          <RadialBarChart
-            cx="50%"
-            cy="50%"
-            innerRadius="70%"
-            outerRadius="100%"
-            barSize={10}
-            data={chartData}
-            startAngle={180}
-            endAngle={0}
-          >
-            <PolarAngleAxis
-              type="number"
-              domain={[0, 100]}
-              angleAxisId={0}
-              tick={false}
-            />
-            <RadialBar
-              background
-              dataKey="value"
-              cornerRadius={10}
-              fill={getColor()}
-            />
-          </RadialBarChart>
-        </ResponsiveContainer>
+    <div className="bg-[#222735] border border-[#334155] rounded-2xl p-5">
+      <h3 className="text-xs font-medium uppercase tracking-wider text-[#64748B] mb-4">
+        Risk Level
+      </h3>
 
-        {/* Needle/Text */}
-        <div className="absolute top-[60%] left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-          <div className="text-4xl font-bold font-mono text-white tracking-tighter">
-            {percentage.toFixed(0)}%
+      <div className="flex flex-col items-center">
+        <svg viewBox="0 0 200 110" className="w-full max-w-[220px]">
+          <defs>
+            <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#22C55E" />
+              <stop offset="50%" stopColor="#F59E0B" />
+              <stop offset="100%" stopColor="#EF4444" />
+            </linearGradient>
+          </defs>
+
+          {/* Background arc */}
+          <path
+            d={bgPath}
+            fill="none"
+            stroke="#334155"
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+          />
+
+          {/* Filled arc */}
+          {fillPath && (
+            <path
+              d={fillPath}
+              fill="none"
+              stroke="url(#gaugeGradient)"
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+            />
+          )}
+        </svg>
+
+        {/* Center text */}
+        <div className="-mt-14 text-center">
+          <div className="font-mono text-2xl font-bold text-white">
+            {percentage}%
           </div>
-          <div className={cn("text-xs font-bold uppercase mt-1 px-2 py-0.5 rounded", 
-            score < 0.3 ? "text-neon-green bg-neon-green/10" :
-            score < 0.7 ? "text-neon-orange bg-neon-orange/10" : "text-red-500 bg-red-500/10"
-          )}>
-            {score < 0.3 ? "Low Risk" : score < 0.7 ? "Moderate" : "High Risk"}
-          </div>
+          <div className="text-xs text-[#64748B] mt-1">Risk Score</div>
         </div>
       </div>
-      
-      <p className="text-zinc-400 text-xs text-center mt-2 px-4">
-        Probability of impermanent loss exceeding 5% based on current volatility.
-      </p>
-    </GlowContainer>
+    </div>
   );
 }
