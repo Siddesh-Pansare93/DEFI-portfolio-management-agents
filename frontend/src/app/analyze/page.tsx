@@ -121,7 +121,7 @@ function AnalyzeContent() {
 
   if (!wallet || !jobId) {
     return (
-      <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-[#0F172A] text-white">
+      <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-transparent text-white">
         <AlertCircle className="w-10 h-10 text-red-400" />
         <h1 className="text-xl text-red-400 font-medium">Invalid Request</h1>
         <p className="text-[#94A3B8] text-sm">Missing wallet address or job ID.</p>
@@ -142,7 +142,7 @@ function AnalyzeContent() {
     (status === "analyzing" && !!workflowState?.finalRecommendation);
 
   return (
-    <div className="min-h-screen pb-20 bg-[#0F172A] overflow-x-hidden">
+    <div className="min-h-screen pb-20 bg-transparent overflow-x-hidden">
       <NavBar />
 
       <main className="container mx-auto px-4 pt-24 space-y-10">
@@ -173,7 +173,7 @@ function AnalyzeContent() {
 
         {/* ── Error Display ── */}
         {error && (
-          <div className="bg-[#222735] border border-red-500/30 rounded-2xl p-5">
+          <div className="bg-glass border border-[rgba(255,255,255,0.06)] rounded-2xl p-5 backdrop-blur-xl">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="flex items-center gap-4 text-red-400">
                 <AlertCircle className="w-5 h-5 shrink-0" />
@@ -305,7 +305,7 @@ export default function AnalyzePage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-[#0F172A]">
+        <div className="min-h-screen flex items-center justify-center bg-transparent">
           <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
         </div>
       }

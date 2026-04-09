@@ -2,6 +2,8 @@
 
 import React, { useEffect, useRef } from 'react';
 import { Lightbulb, Shield, Scale } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { TypingText } from './TypingText';
 
 interface NegotiationMessage {
   round: number;
@@ -17,26 +19,25 @@ interface NegotiationChatProps {
   status?: string;
 }
 
-const agentConfig: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
+const agentConfig: Record<string, { icon: React.ReactNode; colorHex: string; colorClass: string }> = {
   'Strategy Proposer': {
-    icon: <Lightbulb className="w-4 h-4 text-amber-400" />,
-    color: 'text-amber-400',
-    bg: 'bg-amber-400/10',
+    icon: <Lightbulb className="w-4 h-4 text-white" />,
+    colorHex: '#F59E0B',
+    colorClass: 'text-amber-500',
   },
   'Risk Validator': {
-    icon: <Shield className="w-4 h-4 text-red-400" />,
-    color: 'text-red-400',
-    bg: 'bg-red-400/10',
+    icon: <Shield className="w-4 h-4 text-white" />,
+    colorHex: '#EF4444',
+    colorClass: 'text-red-500',
   },
   'Nash Negotiator': {
-    icon: <Scale className="w-4 h-4 text-violet-400" />,
-    color: 'text-violet-400',
-    bg: 'bg-violet-400/10',
+    icon: <Scale className="w-4 h-4 text-white" />,
+    colorHex: '#8B5CF6',
+    colorClass: 'text-violet-500',
   },
 };
 
 function getAgentStyle(from: string) {
-  // Match loosely in case the name varies slightly
   const key = Object.keys(agentConfig).find((k) =>
     from.toLowerCase().includes(k.toLowerCase().split(' ')[0].toLowerCase())
   );
@@ -58,94 +59,125 @@ export default function NegotiationChat({ messages, status }: NegotiationChatPro
   }, [messages]);
 
   return (
-    <div className="bg-[#222735] border border-[#334155] rounded-2xl overflow-hidden">
+    <div className="glass-card overflow-hidden w-full max-w-4xl mx-auto">
       {/* Header */}
-      <div className="px-5 py-3 border-b border-[#334155] flex items-center justify-between">
-        <span className="font-semibold text-sm text-white">Negotiation Log</span>
+      <div className="px-5 py-4 border-b border-[rgba(255,255,255,0.06)] flex items-center justify-between bg-[rgba(255,255,255,0.01)]">
+        <span className="font-semibold text-sm text-[#EDEDEF] tracking-wide">Agent Negotiation</span>
         {isLive && (
           <div className="flex items-center gap-2">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
             </span>
-            <span className="text-xs text-green-400 font-medium">Live</span>
+            <span className="text-xs text-emerald-400 font-medium tracking-wide uppercase">Live</span>
           </div>
         )}
       </div>
 
       {/* Message area */}
-      <div ref={scrollRef} className="max-h-[500px] overflow-y-auto p-4 space-y-4">
+      <div ref={scrollRef} className="max-h-[500px] overflow-y-auto p-6 space-y-6">
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-40">
-            <span className="text-sm text-[#64748B]">Awaiting negotiation...</span>
+            <span className="text-sm text-[#4A4F5A]">Awaiting negotiation...</span>
           </div>
         ) : (
-          messages.map((msg, idx) => {
-            const style = getAgentStyle(msg.from);
+          <AnimatePresence>
+            {messages.map((msg, idx) => {
+              const style = getAgentStyle(msg.from);
+              const isNash = isNashNegotiator(msg.from);
 
-            if (isNashNegotiator(msg.from)) {
+              if (isNash) {
+                return (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-violet-500/5 rounded-2xl p-6 border border-violet-500/15 w-full flex flex-col items-center text-center mt-8"
+                  >
+                    <div className="text-violet-500 text-xs uppercase tracking-[0.2em] font-bold mb-4">
+                      Final Decision
+                    </div>
+                    
+                    <div className="relative w-12 h-12 mb-4 flex items-center justify-center">
+                      <div 
+                        className="absolute inset-0 rounded-full blur-[10px] opacity-50"
+                        style={{ backgroundColor: style.colorHex }}
+                      />
+                      <div 
+                        className="relative z-10 w-full h-full rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(139,92,246,0.5)]"
+                        style={{ background: `radial-gradient(circle at center, ${style.colorHex} 0%, transparent 80%)`, backgroundColor: '#0A0A0F' }}
+                      >
+                        {style.icon}
+                      </div>
+                    </div>
+                    
+                    <p className="text-base text-[#EDEDEF] mb-4 leading-relaxed max-w-2xl">
+                      <TypingText text={msg.content} />
+                    </p>
+                    
+                    {msg.keyPoints && msg.keyPoints.length > 0 && (
+                      <div className="flex flex-wrap gap-2 justify-center">
+                        {msg.keyPoints.map((point, i) => (
+                          <span
+                            key={i}
+                            className="bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] text-xs text-[#EDEDEF] px-3 py-1 rounded-lg"
+                          >
+                            {point}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                );
+              }
+
               return (
-                <div
-                  key={idx}
-                  className="bg-[#272F42] rounded-xl p-4 border border-violet-500/20"
+                <motion.div 
+                  key={idx} 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex gap-4"
                 >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-violet-400/10">
-                      <Scale className="w-4 h-4 text-violet-400" />
+                  <div className="relative w-8 h-8 shrink-0 flex items-center justify-center mt-1">
+                    <div 
+                      className="absolute inset-0 rounded-full blur-[8px] opacity-40"
+                      style={{ backgroundColor: style.colorHex }}
+                    />
+                    <div 
+                      className="relative z-10 w-full h-full rounded-full flex items-center justify-center border border-[rgba(255,255,255,0.1)]"
+                      style={{ background: `radial-gradient(circle at center, ${style.colorHex} 0%, transparent 80%)`, backgroundColor: '#0A0A0F' }}
+                    >
+                      {React.cloneElement(style.icon as React.ReactElement, { className: "w-3.5 h-3.5" })}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-violet-400">
-                        {msg.from}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-sm font-medium ${style.colorClass}`}>{msg.from}</span>
+                      <span className="bg-[rgba(255,255,255,0.04)] text-[#8A8F98] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full">
+                        Round {msg.round}
                       </span>
-                      <span className="text-xs text-[#64748B]">Round {msg.round}</span>
                     </div>
+                    <div className="text-sm text-[#8A8F98] leading-relaxed">
+                      <TypingText text={msg.content} />
+                    </div>
+                    {msg.keyPoints && msg.keyPoints.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {msg.keyPoints.map((point, i) => (
+                          <span
+                            key={i}
+                            className="bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] text-xs text-[#8A8F98] px-2.5 py-1 rounded-lg"
+                          >
+                            {point}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <p className="text-sm text-[#94A3B8] mt-1">{msg.content}</p>
-                  {msg.keyPoints && msg.keyPoints.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {msg.keyPoints.map((point, i) => (
-                        <span
-                          key={i}
-                          className="bg-[#1E2433] text-xs text-[#94A3B8] px-2 py-0.5 rounded"
-                        >
-                          {point}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                </motion.div>
               );
-            }
-
-            return (
-              <div key={idx} className="flex gap-3">
-                <div
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${style.bg}`}
-                >
-                  {style.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-medium ${style.color}`}>{msg.from}</span>
-                    <span className="text-xs text-[#64748B]">Round {msg.round}</span>
-                  </div>
-                  <p className="text-sm text-[#94A3B8] mt-1">{msg.content}</p>
-                  {msg.keyPoints && msg.keyPoints.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {msg.keyPoints.map((point, i) => (
-                        <span
-                          key={i}
-                          className="bg-[#272F42] text-xs text-[#94A3B8] px-2 py-0.5 rounded"
-                        >
-                          {point}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })
+            })}
+          </AnimatePresence>
         )}
       </div>
     </div>
