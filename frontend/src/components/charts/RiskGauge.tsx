@@ -5,79 +5,99 @@ interface RiskGaugeProps {
 }
 
 export function RiskGauge({ score }: RiskGaugeProps) {
-  const percentage = Math.round(score * 100);
-  const clampedScore = Math.max(0, Math.min(1, score));
+  const percentage = Math.round(Math.max(0, Math.min(1, score)) * 100);
+  const clamped = Math.max(0.01, Math.min(0.99, score));
 
-  // Semicircle SVG gauge
-  const radius = 70;
-  const strokeWidth = 12;
-  const cx = 100;
-  const cy = 90;
+  // Semicircle parameters
+  const size = 200;
+  const cx = size / 2;
+  const cy = 105;
+  const r = 75;
+  const stroke = 14;
 
-  // Arc from 180 degrees (left) to 0 degrees (right)
-  const startAngle = Math.PI;
-  const endAngle = 0;
-  const sweepAngle = startAngle - (startAngle - endAngle) * clampedScore;
+  // Helper: angle to point on arc (0 = left, PI = right for a top semicircle)
+  // We go from 180deg (left) to 0deg (right) — that's a standard top semicircle
+  const pointOnArc = (fraction: number) => {
+    const angle = Math.PI * (1 - fraction); // 0->PI=left, 1->0=right
+    return {
+      x: cx + r * Math.cos(angle),
+      y: cy - r * Math.sin(angle),
+    };
+  };
 
-  const arcStartX = cx + radius * Math.cos(startAngle);
-  const arcStartY = cy - radius * Math.sin(startAngle);
-  const arcEndX = cx + radius * Math.cos(sweepAngle);
-  const arcEndY = cy - radius * Math.sin(sweepAngle);
+  const start = pointOnArc(0);
+  const end = pointOnArc(1);
+  const fill = pointOnArc(clamped);
 
-  const bgArcEndX = cx + radius * Math.cos(endAngle);
-  const bgArcEndY = cy - radius * Math.sin(endAngle);
+  const bgPath = `M ${start.x} ${start.y} A ${r} ${r} 0 0 1 ${end.x} ${end.y}`;
+  // Fix: for a semicircle, the large-arc-flag should always be 0
+  const fillPath = `M ${start.x} ${start.y} A ${r} ${r} 0 0 1 ${fill.x} ${fill.y}`;
 
-  const largeArcFlag = clampedScore > 0.5 ? 1 : 0;
+  // Needle indicator dot position
+  const needle = pointOnArc(clamped);
 
-  const bgPath = `M ${arcStartX} ${arcStartY} A ${radius} ${radius} 0 1 1 ${bgArcEndX} ${bgArcEndY}`;
-  const fillPath =
-    clampedScore > 0
-      ? `M ${arcStartX} ${arcStartY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${arcEndX} ${arcEndY}`
-      : "";
+  // Color based on score
+  const scoreColor =
+    percentage <= 30 ? "#22C55E" : percentage <= 60 ? "#F59E0B" : "#EF4444";
 
   return (
-    <div className="bg-[#222735] border border-[#334155] rounded-2xl p-5">
-      <h3 className="text-xs font-medium uppercase tracking-wider text-[#64748B] mb-4">
-        Risk Level
+    <div className="glass-card p-5">
+      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[#4A4F5A] mb-4">
+        Risk Score
       </h3>
 
-      <div className="flex flex-col items-center">
-        <svg viewBox="0 0 200 110" className="w-full max-w-[220px]">
+      <div className="flex flex-col items-center justify-center h-[200px] relative">
+        <svg viewBox="0 0 200 120" className="w-full max-w-[220px]">
           <defs>
-            <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <linearGradient id="riskGradient" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stopColor="#22C55E" />
               <stop offset="50%" stopColor="#F59E0B" />
               <stop offset="100%" stopColor="#EF4444" />
             </linearGradient>
+            
+            <filter id="needleGlow" x="-100%" y="-100%" width="300%" height="300%">
+              <feGaussianBlur stdDeviation="3" />
+              <feMerge>
+                <feMergeNode />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
 
-          {/* Background arc */}
+          {/* Background track */}
           <path
             d={bgPath}
             fill="none"
-            stroke="#334155"
-            strokeWidth={strokeWidth}
+            stroke="rgba(255,255,255,0.06)"
+            strokeWidth={stroke}
             strokeLinecap="round"
           />
 
           {/* Filled arc */}
-          {fillPath && (
-            <path
-              d={fillPath}
-              fill="none"
-              stroke="url(#gaugeGradient)"
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-            />
-          )}
+          <path
+            d={fillPath}
+            fill="none"
+            stroke="url(#riskGradient)"
+            strokeWidth={stroke}
+            strokeLinecap="round"
+          />
+
+          {/* Needle dot */}
+          <circle
+            cx={needle.x}
+            cy={needle.y}
+            r={5}
+            fill={scoreColor}
+            filter="url(#needleGlow)"
+          />
+          <circle cx={needle.x} cy={needle.y} r={2.5} fill="white" />
         </svg>
 
-        {/* Center text */}
-        <div className="-mt-14 text-center">
-          <div className="font-mono text-2xl font-bold text-white">
+        {/* Center value */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 translate-y-2 text-center pointer-events-none">
+          <div className="font-mono text-3xl font-bold" style={{ color: scoreColor }}>
             {percentage}%
           </div>
-          <div className="text-xs text-[#64748B] mt-1">Risk Score</div>
         </div>
       </div>
     </div>

@@ -123,7 +123,7 @@ export async function runRiskValidator(state: WorkflowState): Promise<WorkflowSt
       // Calculate risk score (0 = safest, 1 = riskiest)
       const ilRisk = Math.min(estimatedMaxIL / (config.riskLimits.maxImpermanentLoss * 100), 1);
       const volatilityRisk = Math.min(volatility / 50, 1);
-      riskScore = (ilRisk * 0.6) + (volatilityRisk * 0.4); // Weighted average
+      riskScore = Math.min((ilRisk * 0.6) + (volatilityRisk * 0.4), 0.85); // Cap at 0.85 — never fully hopeless
 
     } else if (strategyProposal.action === 'swap') {
       // Swap strategy - lower risk than LP
@@ -228,7 +228,7 @@ function generateSaferStrategy(
       pool: details.pool,
       ethAmount: saferEthAmount,
       usdcAmount: saferUsdcAmount,
-      priceRangeLower: currentPrice - (widerRangeWidth / 2),
+      priceRangeLower: Math.max(currentPrice * 0.1, currentPrice - (widerRangeWidth / 2)),
       priceRangeUpper: currentPrice + (widerRangeWidth / 2)
     };
 

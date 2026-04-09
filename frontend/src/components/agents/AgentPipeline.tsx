@@ -58,8 +58,17 @@ export function AgentPipeline({ status, workflowState, currentAgentName }: Agent
     { x: 550, y: 250 },  // Nash (bottom right)
   ];
 
+  // Map names to specific IDs used by NeuralNetwork connections
+  const ID_MAP: Record<string, string> = {
+    'Data Collector': 'collector',
+    'Market Analyzer': 'analyzer',
+    'Strategy Proposer': 'strategy',
+    'Risk Validator': 'risk',
+    'Nash Negotiator': 'nash'
+  };
+
   const agentStates = AGENT_DEFINITIONS.map((def, idx) => ({
-    id: def.name.toLowerCase().split(" ")[1] || def.name.toLowerCase().split(" ")[0],
+    id: ID_MAP[def.name] || def.name.toLowerCase().split(" ")[0],
     name: def.name,
     status: getNodeStatus(idx),
     message: getNodeStatus(idx) === "active" ? def.message : undefined,

@@ -2,6 +2,7 @@
 
 import { MarketAnalysis } from "@/lib/types";
 import { formatPercent } from "@/lib/utils";
+import { NeuralCard, CardLabel } from "@/components/ui/neural-card";
 
 interface MarketAnalysisPanelProps {
   data: MarketAnalysis | null;
@@ -25,10 +26,9 @@ export function MarketAnalysisPanel({ data }: MarketAnalysisPanelProps) {
   const { ethTrend, volatility, marketCondition, reasoning } = data;
 
   return (
-    <div className="bg-[#222735] border border-[#334155] rounded-2xl p-6 h-full flex flex-col">
-      <h3 className="uppercase tracking-wider text-[#64748B] text-xs font-semibold mb-5">
-        Market Analysis
-      </h3>
+    <NeuralCard accentColor="#6366F1" className="h-full">
+      <div className="p-6 h-full flex flex-col">
+      <CardLabel className="mb-5 block">Market Analysis</CardLabel>
 
       <div className="flex-1 space-y-4">
         {/* Badges grid */}
@@ -100,5 +100,6 @@ export function MarketAnalysisPanel({ data }: MarketAnalysisPanelProps) {
         </div>
       )}
     </div>
+    </NeuralCard>
   );
 }

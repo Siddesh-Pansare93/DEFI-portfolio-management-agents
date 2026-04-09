@@ -11,6 +11,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { TrendingUp, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { NeuralCard, CardLabel } from "@/components/ui/neural-card";
 
 interface BacktestPanelProps {
   /** Portfolio total value */
@@ -75,13 +76,12 @@ export function BacktestPanel({ portfolioValue, expectedAPY }: BacktestPanelProp
     "$" + v.toLocaleString("en-US", { maximumFractionDigits: 0 });
 
   return (
-    <div className="bg-[#222735] border border-[#334155] rounded-2xl p-6">
+    <NeuralCard accentColor="#22C55E" halo>
+      <div className="p-6">
       {/* Header */}
       <div className="flex items-center gap-2 mb-6">
-        <TrendingUp className="w-4 h-4 text-[#64748B]" />
-        <h3 className="text-xs font-medium uppercase tracking-wider text-[#64748B]">
-          Historical Performance (Simulated Backtest)
-        </h3>
+        <TrendingUp className="w-4 h-4 text-white/30" />
+        <CardLabel>Historical Performance</CardLabel>
       </div>
 
       {/* Stats Row */}
@@ -194,6 +194,7 @@ export function BacktestPanel({ portfolioValue, expectedAPY }: BacktestPanelProp
       <p className="text-[10px] text-[#475569] mt-4 text-center">
         * Based on simulated historical performance. Past results do not guarantee future returns.
       </p>
-    </div>
+      </div>
+    </NeuralCard>
   );
 }

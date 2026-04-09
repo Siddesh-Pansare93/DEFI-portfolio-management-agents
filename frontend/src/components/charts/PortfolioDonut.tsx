@@ -3,6 +3,7 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { PortfolioData } from "@/lib/types";
 import { formatUSD, formatPercent } from "@/lib/utils";
+import { NeuralCard, CardLabel } from "@/components/ui/neural-card";
 
 const TOKEN_COLORS: Record<string, string> = {
   ETH: "#F59E0B",
@@ -27,10 +28,9 @@ export function PortfolioDonut({ data }: PortfolioDonutProps) {
   }));
 
   return (
-    <div className="bg-[#222735] border border-[#334155] rounded-2xl p-5">
-      <h3 className="text-xs font-medium uppercase tracking-wider text-[#64748B] mb-4">
-        Current Portfolio
-      </h3>
+    <NeuralCard accentColor="#F59E0B" halo className="p-0">
+      <div className="p-5">
+      <CardLabel className="mb-4 block">Portfolio Allocation</CardLabel>
 
       <div className="w-full h-[200px] relative">
         <ResponsiveContainer width="100%" height="100%">
@@ -88,5 +88,6 @@ export function PortfolioDonut({ data }: PortfolioDonutProps) {
         ))}
       </div>
     </div>
+    </NeuralCard>
   );
 }

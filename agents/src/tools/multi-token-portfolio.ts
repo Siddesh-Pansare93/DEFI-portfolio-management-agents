@@ -44,7 +44,7 @@ const FALLBACK_PRICES: Record<string, number> = {
   CRV:  0.55,
 };
 
-const SIMULATION_THRESHOLD_USD = 100; // If real portfolio < $100, use simulation
+const SIMULATION_THRESHOLD_USD = 500; // If real portfolio < $500, use simulation for demo
 
 /**
  * Comprehensive multi-token portfolio

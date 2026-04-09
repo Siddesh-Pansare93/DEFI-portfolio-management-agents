@@ -3,6 +3,7 @@
 import { FinalRecommendation } from "@/lib/types";
 import { formatAPY, cn } from "@/lib/utils";
 import { ArrowRight, CheckCircle, Info, Loader2 } from "lucide-react";
+import { NeuralCard, CardLabel, CardValue } from "@/components/ui/neural-card";
 
 interface FinalRecommendationCardProps {
   recommendation: FinalRecommendation;
@@ -10,9 +11,9 @@ interface FinalRecommendationCardProps {
   isExecuting?: boolean;
 }
 
-const actionBorderColor: Record<string, string> = {
+const actionColor: Record<string, string> = {
   add_liquidity: "#F59E0B", // amber
-  swap: "#3B82F6", // blue
+  swap: "#6366F1", // indigo
   hold: "#8B5CF6", // violet
 };
 
@@ -29,22 +30,20 @@ export function FinalRecommendationCard({
 }: FinalRecommendationCardProps) {
   const { action, expectedAPY, maxRisk, confidence, explanation } = recommendation;
 
-  const borderColor = actionBorderColor[action] || "#8B5CF6";
+  const accent = actionColor[action] || "#8B5CF6";
 
   return (
-    <div
-      className="glass-card p-8 w-full max-w-4xl mx-auto overflow-hidden relative"
-      style={{ borderLeft: `3px solid ${borderColor}` }}
-    >
+    <NeuralCard accentColor={accent} halo glow className="w-full max-w-4xl mx-auto">
+      <div className="p-8 overflow-hidden relative">
       {/* Background Glow */}
-      <div 
+      <div
         className="absolute top-0 right-0 w-[500px] h-[500px] bg-violet-500/10 rounded-full blur-[100px] pointer-events-none -translate-y-1/2 translate-x-1/4"
       />
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 relative z-10">
         {/* Left: Action & badges */}
         <div className="flex-1 space-y-5">
-          <h2 className="font-sans font-bold text-[2rem] text-white tracking-tight">
+          <h2 className="text-2xl font-bold text-white">
             {actionLabel[action]}
           </h2>
 
@@ -74,7 +73,7 @@ export function FinalRecommendationCard({
               onClick={onExecute}
               disabled={isExecuting}
               className={cn(
-                "bg-[#8B5CF6] text-white font-semibold rounded-xl px-8 py-4 flex items-center gap-2 transition-all duration-200 shadow-[0_0_20px_rgba(139,92,246,0.3)]",
+                "bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl px-8 py-4 flex items-center gap-2 transition-all duration-200 shadow-[0_0_20px_rgba(139,92,246,0.3)]",
                 "hover:brightness-110 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               )}
             >
@@ -103,6 +102,7 @@ export function FinalRecommendationCard({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </NeuralCard>
   );
 }

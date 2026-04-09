@@ -82,24 +82,27 @@ export function nashNegotiator(state: WorkflowState): WorkflowState {
       console.log('   Reason: Safety concerns require adjustment\n');
 
       if (riskValidation.adjustedStrategy) {
+        // For risk-adjusted strategies, confidence reflects that we adapted to be safer
+        // Floor at 0.55 — the adjusted strategy IS the safe choice
+        const adjustedConfidence = Math.max(0.55, 0.3 + safetyUtility * 0.5 + returnUtility * 0.3);
         finalRecommendation = {
           action: riskValidation.adjustedStrategy.action,
           details: riskValidation.adjustedStrategy.details,
           expectedAPY: riskValidation.adjustedStrategy.expectedAPY,
           maxRisk: riskValidation.estimatedMaxIL * 0.7, // Adjusted strategy has lower risk
-          confidence: safetyUtility,
+          confidence: Math.min(adjustedConfidence, 0.85),
           explanation: combineReasoningRiskAdjusted(riskValidation)
         };
 
         decisionReason = 'Risk-adjusted strategy adopted for safety';
       } else {
-        // No adjusted strategy - default to hold
+        // No adjusted strategy - default to hold (still a deliberate decision)
         finalRecommendation = {
           action: 'hold',
           details: null,
           expectedAPY: 0,
           maxRisk: 0,
-          confidence: 0.5,
+          confidence: 0.65,
           explanation: `Strategy rejected due to risk concerns. ${riskValidation.reasoning} Maintaining current portfolio allocation is the safest option.`
         };
 
@@ -224,12 +227,17 @@ function reduceStrategySize(details: any, factor: number): any {
   if (!details) return null;
 
   if ('ethAmount' in details && 'usdcAmount' in details) {
-    // Add liquidity details
-    return {
+    // Add liquidity details — reduce size and ensure valid price range
+    const result = {
       ...details,
       ethAmount: details.ethAmount * factor,
       usdcAmount: details.usdcAmount * factor
     };
+    // Ensure price range is never negative
+    if (result.priceRangeLower !== undefined && result.priceRangeLower <= 0) {
+      result.priceRangeLower = (details.priceRangeUpper || 3000) * 0.1;
+    }
+    return result;
   } else if ('amount' in details) {
     // Swap details
     return {

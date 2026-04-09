@@ -1,5 +1,7 @@
 "use client";
 
+import { NeuralCard, CardLabel } from "@/components/ui/neural-card";
+
 interface ConfidenceMeterProps {
   confidence: number; // 0-1
 }
@@ -9,10 +11,9 @@ export function ConfidenceMeter({ confidence }: ConfidenceMeterProps) {
   const clampedHeight = Math.max(0, Math.min(100, percentage));
 
   return (
-    <div className="bg-[#222735] border border-[#334155] rounded-2xl p-5">
-      <h3 className="text-xs font-medium uppercase tracking-wider text-[#64748B] mb-4">
-        Confidence
-      </h3>
+    <NeuralCard accentColor="#6366F1" halo>
+      <div className="p-5">
+      <CardLabel className="mb-4 block">Confidence</CardLabel>
 
       <div className="flex flex-col items-center">
         {/* Percentage text */}
@@ -34,6 +35,7 @@ export function ConfidenceMeter({ confidence }: ConfidenceMeterProps) {
         {/* Label */}
         <div className="text-xs text-[#64748B] mt-3">Confidence</div>
       </div>
-    </div>
+      </div>
+    </NeuralCard>
   );
 }

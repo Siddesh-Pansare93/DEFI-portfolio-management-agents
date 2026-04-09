@@ -11,6 +11,7 @@ import {
   Line,
   ComposedChart,
 } from "recharts";
+import { NeuralCard, CardLabel } from "@/components/ui/neural-card";
 
 interface NashBargainingVizProps {
   safetyUtility: number;
@@ -36,10 +37,9 @@ export function NashBargainingViz({
   const disagreementData = [{ x: disagreementPoint.x, y: disagreementPoint.y }];
 
   return (
-    <div className="bg-[#222735] border border-[#334155] rounded-2xl p-5">
-      <h3 className="text-xs font-medium uppercase tracking-wider text-[#64748B] mb-4">
-        Nash Equilibrium
-      </h3>
+    <NeuralCard accentColor="#8B5CF6" halo>
+      <div className="p-5">
+      <CardLabel className="mb-4 block">Nash Equilibrium</CardLabel>
 
       <div className="w-full h-[260px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -135,6 +135,7 @@ export function NashBargainingViz({
           Pareto Frontier
         </div>
       </div>
-    </div>
+      </div>
+    </NeuralCard>
   );
 }

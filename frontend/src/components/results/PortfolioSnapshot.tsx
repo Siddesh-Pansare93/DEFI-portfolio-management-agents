@@ -2,6 +2,7 @@
 
 import { PortfolioData } from "@/lib/types";
 import { formatUSD, formatPercent } from "@/lib/utils";
+import { NeuralCard, CardLabel } from "@/components/ui/neural-card";
 
 interface PortfolioSnapshotProps {
   data: PortfolioData | null;
@@ -42,10 +43,9 @@ export function PortfolioSnapshot({ data }: PortfolioSnapshotProps) {
   ];
 
   return (
-    <div className="bg-[#222735] border border-[#334155] rounded-2xl p-6 h-full">
-      <h3 className="uppercase tracking-wider text-[#64748B] text-xs font-semibold mb-5">
-        Portfolio Snapshot
-      </h3>
+    <NeuralCard accentColor="#06B6D4" className="h-full">
+      <div className="p-6">
+      <CardLabel className="mb-5 block">Portfolio Snapshot</CardLabel>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
         {stats.map((stat) => (
@@ -64,6 +64,7 @@ export function PortfolioSnapshot({ data }: PortfolioSnapshotProps) {
           </div>
         ))}
       </div>
-    </div>
+      </div>
+    </NeuralCard>
   );
 }
