@@ -3,7 +3,7 @@
 // ============================================================================
 
 /**
- * Holdings for a single token (ETH or USDC)
+ * Holdings for a single token
  */
 export interface TokenHolding {
   balance: number;        // Token balance (decimal format, e.g., 1.5 ETH)
@@ -13,23 +13,21 @@ export interface TokenHolding {
 
 /**
  * Complete portfolio data including holdings and pool information
+ * Now supports all 25 tokens, not just ETH/USDC
  */
 export interface PortfolioData {
-  holdings: {
-    ETH: TokenHolding;
-    USDC: TokenHolding;
-  };
+  holdings: Record<string, TokenHolding>; // All tokens by symbol
+  topHoldings: string[];                   // Top 5 symbols by value
   totalValueUSD: number;
-  allocationPercent: {
-    ETH: number;          // Percentage of portfolio in ETH (0-100)
-    USDC: number;         // Percentage of portfolio in USDC (0-100)
-  };
+  allocationPercent: Record<string, number>; // % allocation per token
+  dominantToken: string;                   // Symbol with largest holding
   uniswapPool: {
     address: string;
     liquidity: number;    // Total value locked in USD
     volume24h: number;    // 24-hour trading volume in USD
     feeAPR: number;       // Annual percentage rate from fees
   };
+  diversificationScore: number; // 0-1 (HHI-based)
 }
 
 // ============================================================================
@@ -37,15 +35,75 @@ export interface PortfolioData {
 // ============================================================================
 
 /**
- * Market trend analysis for ETH
+ * News item with sentiment
  */
-export interface MarketAnalysis {
+export interface NewsItem {
+  title: string;
+  description: string;
+  source: string;
+  url: string;
+  publishedAt: Date;
+  sentiment: 'bullish' | 'bearish' | 'neutral';
+}
+
+/**
+ * Deep market analysis (replaces MarketAnalysis, includes LLM + indicators)
+ */
+export interface DeepMarketAnalysis {
   ethTrend: 'bullish' | 'bearish' | 'neutral';
-  ethPriceChange30d: number;      // 30-day price change percentage
-  volatility: number;             // Annualized volatility percentage
+  ethPriceChange30d: number;
+  volatility: number;
   marketCondition: 'stable' | 'volatile' | 'uncertain';
   recommendation: 'increase_eth' | 'decrease_eth' | 'maintain';
-  reasoning: string;              // 2-3 sentence explanation
+  fearGreedIndex: number;
+  fearGreedLabel: string;
+  sentimentScore: number;       // -1 to 1
+  newsHeadlines: NewsItem[];    // Top 5 articles
+  technicalIndicators: {
+    rsi: number;
+    macd: { value: number; signal: number; histogram: number };
+    bollingerBands: { upper: number; middle: number; lower: number; percentB?: number };
+    ema7: number;
+    ema30: number;
+    signal: 'strong_buy' | 'buy' | 'hold' | 'sell' | 'strong_sell';
+  };
+  uniswapTVL: number;
+  uniswapTVLChange24h: number;
+  supportLevel: number;
+  resistanceLevel: number;
+  macroSignal: 'risk_on' | 'risk_off' | 'neutral';
+  analysisConfidence: number;   // 0-1
+  geminiReasoning: string;      // Full LLM reasoning text
+  reasoning: string;            // Alias for geminiReasoning (backwards compat)
+}
+
+// Backwards-compatible alias
+export type MarketAnalysis = DeepMarketAnalysis;
+
+// ============================================================================
+// NEGOTIATION TYPES
+// ============================================================================
+
+export interface NegotiationMessage {
+  round: number;
+  from: 'StrategyProposer' | 'RiskValidator' | 'NashNegotiator';
+  type: 'proposal' | 'critique' | 'refinement' | 'counter_proposal' |
+        'concession' | 'agreement' | 'escalation' | 'final_decision';
+  content: string;           // Full human-readable reasoning
+  proposalRef?: string;      // Which proposal version (v1, v2...)
+  keyPoints: string[];       // Bullet points for quick display
+  timestamp: Date;
+}
+
+// ============================================================================
+// USER PREFERENCES
+// ============================================================================
+
+export interface UserPreferences {
+  maxImpermanentLoss: number;   // Default 10
+  maxPositionSize: number;      // Default 70
+  riskAppetite: 'conservative' | 'moderate' | 'aggressive';
+  preferredActions: ('add_liquidity' | 'swap' | 'hold')[];
 }
 
 // ============================================================================
@@ -56,68 +114,65 @@ export interface MarketAnalysis {
  * Details for adding liquidity to Uniswap V3
  */
 export interface AddLiquidityDetails {
-  pool: string;                   // Pool name (e.g., "ETH-USDC")
-  ethAmount: number;              // Amount of ETH to provide
-  usdcAmount: number;             // Amount of USDC to provide
-  priceRangeLower: number;        // Lower bound of price range
-  priceRangeUpper: number;        // Upper bound of price range
+  pool: string;
+  ethAmount: number;
+  usdcAmount: number;
+  priceRangeLower: number;
+  priceRangeUpper: number;
 }
 
 /**
  * Details for token swap
  */
 export interface SwapDetails {
-  fromToken: string;              // Token to sell
-  toToken: string;                // Token to buy
-  amount: number;                 // Amount to swap
+  fromToken: string;
+  toToken: string;
+  amount: number;
 }
 
-/**
- * Union type for strategy details (can be add_liquidity, swap, or null for hold)
- */
 export type StrategyDetails = AddLiquidityDetails | SwapDetails | null;
 
 /**
- * Complete strategy proposal from Strategy Agent
+ * Strategy proposal (versioned for multi-round negotiation)
  */
 export interface StrategyProposal {
   action: 'add_liquidity' | 'swap' | 'hold';
   details: StrategyDetails;
-  expectedAPY: number;            // Expected annual percentage yield
-  expectedReturn1Year: number;    // Expected return in dollars over 1 year
-  reasoning: string;              // 3-5 sentence explanation
+  expectedAPY: number;
+  expectedReturn1Year: number;
+  reasoning: string;
+  version?: number;             // Round version (v1, v2, ...)
+  geminiReasoning?: string;     // Full LLM text if available
 }
 
 // ============================================================================
 // RISK VALIDATION TYPES
 // ============================================================================
 
-/**
- * Risk validation results from Risk Agent
- */
 export interface RiskValidation {
-  approved: boolean;              // Whether strategy passes risk checks
-  riskScore: number;              // 0-1, where 0 is safest
-  estimatedMaxIL: number;         // Maximum impermanent loss percentage
-  violations: string[];           // List of constraint violations
-  adjustedStrategy: StrategyProposal | null;  // Safer alternative if rejected
-  reasoning: string;              // Explanation of risk assessment
+  approved: boolean;
+  riskScore: number;            // 0-1
+  estimatedMaxIL: number;
+  violations: string[];
+  adjustedStrategy: StrategyProposal | null;
+  reasoning: string;
+  geminiReasoning?: string;     // Full LLM critique text
+  round?: number;               // Which negotiation round
 }
 
 // ============================================================================
 // FINAL RECOMMENDATION TYPES
 // ============================================================================
 
-/**
- * Final recommendation from Nash Negotiator
- */
 export interface FinalRecommendation {
   action: 'add_liquidity' | 'swap' | 'hold';
   details: StrategyDetails;
-  expectedAPY: number;            // Expected annual percentage yield
-  maxRisk: number;                // Maximum impermanent loss percentage
-  confidence: number;             // 0-1, product of return and safety utilities
-  explanation: string;            // Combined reasoning from all agents
+  expectedAPY: number;
+  maxRisk: number;
+  confidence: number;           // 0-1
+  explanation: string;
+  negotiationRounds?: number;   // How many rounds it took
+  nashExplanation?: string;     // Gemini-authored explanation
 }
 
 // ============================================================================
@@ -126,14 +181,19 @@ export interface FinalRecommendation {
 
 /**
  * State object that flows through the LangGraph workflow
- * Each agent reads from and writes to this shared state
  */
 export interface WorkflowState {
   walletAddress: string;
+  userPreferences: UserPreferences | null;        // NEW
   portfolio: PortfolioData | null;
-  marketAnalysis: MarketAnalysis | null;
-  strategyProposal: StrategyProposal | null;
+  marketAnalysis: DeepMarketAnalysis | null;       // Was: MarketAnalysis
+  deepMarketAnalysis: DeepMarketAnalysis | null;   // Alias for marketAnalysis
+  strategyProposal: StrategyProposal | null;       // Current proposal
+  strategyProposals: StrategyProposal[];           // All versions
+  currentProposal: StrategyProposal | null;        // Alias for strategyProposal
   riskValidation: RiskValidation | null;
+  negotiationRound: number;                        // Current round (1-10)
+  negotiationMessages: NegotiationMessage[];       // Full chat history
   finalRecommendation: FinalRecommendation | null;
 }
 
@@ -141,125 +201,101 @@ export interface WorkflowState {
 // JOB MANAGEMENT TYPES
 // ============================================================================
 
-/**
- * Job status for tracking workflow execution
- */
 export type JobStatus = 'pending' | 'analyzing' | 'complete' | 'error';
 
-/**
- * Job state for in-memory job tracking
- */
 export interface JobState {
   jobId: string;
   walletAddress: string;
   status: JobStatus;
-  currentAgent: string | null;   // Name of currently executing agent
-  progress: number;               // 0-1, percentage of workflow completed
-  state: WorkflowState;           // Current workflow state
+  currentAgent: string | null;
+  progress: number;
+  state: WorkflowState;
   result: FinalRecommendation | null;
   error: string | null;
-  createdAt: Date;                // When job was created
-  completedAt: Date | null;       // When job finished (null if still running)
+  createdAt: Date;
+  completedAt: Date | null;
 }
 
 // ============================================================================
 // TOOL FUNCTION TYPES
 // ============================================================================
 
-/**
- * Price data point with timestamp
- */
 export interface PricePoint {
-  timestamp: number;              // Unix timestamp in milliseconds
-  price: number;                  // USD price at that time
+  timestamp: number;
+  price: number;
 }
 
-/**
- * Uniswap V3 pool data from The Graph
- */
 export interface PoolData {
   address: string;
-  liquidity: number;              // Total value locked in USD
-  token0Price: number;            // Price of token0 in terms of token1
-  token1Price: number;            // Price of token1 in terms of token0
-  volumeUSD: number;              // Trading volume in USD
-  feesUSD: number;                // Fees collected in USD
+  liquidity: number;
+  token0Price: number;
+  token1Price: number;
+  volumeUSD: number;
+  feesUSD: number;
 }
 
-/**
- * Optimal price range for Uniswap V3 position
- */
 export interface OptimalRangeResult {
-  lowerPrice: number;             // Lower bound price
-  upperPrice: number;             // Upper bound price
-  lowerTick: number;              // Uniswap V3 lower tick (rounded to tick spacing)
-  upperTick: number;              // Uniswap V3 upper tick (rounded to tick spacing)
+  lowerPrice: number;
+  upperPrice: number;
+  lowerTick: number;
+  upperTick: number;
 }
 
 // ============================================================================
 // API REQUEST/RESPONSE TYPES
 // ============================================================================
 
-/**
- * Response for POST /api/analyze
- */
 export interface AnalyzeResponse {
   jobId: string;
   status: JobStatus;
   message: string;
 }
 
-/**
- * Response for GET /api/status/:jobId
- */
 export interface StatusResponse {
   jobId: string;
   status: JobStatus;
   currentAgent: string | null;
-  progress: number;               // 0-1 progress indicator
-  startTime: string;              // ISO 8601 timestamp
+  progress: number;
+  startTime: string;
+  negotiationRound?: number;
+  negotiationMessages?: NegotiationMessage[];
   result?: {
     finalRecommendation: FinalRecommendation;
     workflowState: WorkflowState;
   };
-  completedTime?: string;         // ISO 8601 timestamp
+  completedTime?: string;
   error?: string;
 }
 
-/**
- * Response for GET /api/portfolio/:walletAddress
- */
 export interface PortfolioResponse {
   walletAddress: string;
-  holdings: {
-    ETH: TokenHolding;
-    USDC: TokenHolding;
-  };
+  holdings: Record<string, TokenHolding>;
   totalValueUSD: number;
-  fetchedAt: string;              // ISO 8601 timestamp
+  fetchedAt: string;
 }
 
-/**
- * Request body for POST /api/log-recommendation
- */
 export interface LogRecommendationRequest {
   walletAddress: string;
   action: string;
-  details: string;                // JSON stringified details
+  details: string;
 }
 
-/**
- * Response for POST /api/log-recommendation
- */
 export interface LogRecommendationResponse {
   success: boolean;
   transactionHash: string;
   blockNumber: number;
 }
 
-/**
- * Request body for POST /api/analyze
- */
 export interface AnalyzeRequest {
   walletAddress: string;
+  preferences?: Partial<UserPreferences>;
+}
+
+export interface MarketOverviewResponse {
+  fearGreedIndex: number;
+  fearGreedLabel: string;
+  ethPrice: number;
+  uniswapTVL: number;
+  topTokenPrices: Record<string, number>;
+  timestamp: string;
 }

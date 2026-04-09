@@ -5,6 +5,7 @@ import { useEffect, Suspense, useState } from "react";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { NavBar } from "@/components/layout/NavBar";
 import { AgentPipeline } from "@/components/agents/AgentPipeline";
+import { NegotiationChat } from "@/components/agents/NegotiationChat";
 import { GlowContainer } from "@/components/layout/GlowContainer";
 import { Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,8 @@ import { NashBargainingViz } from "@/components/charts/NashBargainingViz";
 import { PortfolioSnapshot } from "@/components/results/PortfolioSnapshot";
 import { MarketAnalysisPanel } from "@/components/results/MarketAnalysisPanel";
 import { WorkflowSummary } from "@/components/results/WorkflowSummary";
+import { NewsHeadlinesPanel } from "@/components/results/NewsHeadlinesPanel";
+import { TechnicalIndicatorsCard } from "@/components/results/TechnicalIndicatorsCard";
 
 function AnalyzeContent() {
   const searchParams = useSearchParams();
@@ -44,14 +47,22 @@ function AnalyzeContent() {
 
   const handleExecute = () => {
     if (!workflowState?.finalRecommendation) return;
+    
+    // Check if address is placeholder
+    if (!REBALANCE_LOGGER_ADDRESS || REBALANCE_LOGGER_ADDRESS.length < 42) {
+      toast.warning("Simulation Mode", {
+        description: "Contract address is not configured. Execution simulated.",
+      });
+      return;
+    }
 
     writeContract({
       address: REBALANCE_LOGGER_ADDRESS as `0x${string}`,
       abi: REBALANCE_LOGGER_ABI,
-      functionName: "logRebalance",
+      functionName: "logRecommendation",
       args: [
         workflowState.finalRecommendation.action,
-        BigInt(0),
+        JSON.stringify(workflowState.finalRecommendation.details || {})
       ],
     }, {
       onError: (err) => {
@@ -131,12 +142,22 @@ function AnalyzeContent() {
         {/* Error Display */}
         {error && (
           <GlowContainer glowColor="orange" intensity="high" className="bg-red-950/20 border-red-500/50">
-             <div className="flex items-center gap-4 text-red-400">
-               <AlertCircle className="w-6 h-6" />
-               <div>
-                 <h3 className="font-bold">Execution Failed</h3>
-                 <p className="text-sm font-mono opacity-80">{error}</p>
+             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-red-400">
+               <div className="flex items-center gap-4">
+                 <AlertCircle className="w-6 h-6 shrink-0" />
+                 <div>
+                   <h3 className="font-bold">Execution Failed</h3>
+                   <p className="text-sm font-mono opacity-80">{error}</p>
+                 </div>
                </div>
+               <Button 
+                 variant="outline" 
+                 size="sm" 
+                 className="border-red-500/50 text-red-400 hover:bg-red-500/10 hover:text-red-300 w-full md:w-auto"
+                 onClick={() => window.location.reload()}
+               >
+                 Retry Analysis
+               </Button>
              </div>
           </GlowContainer>
         )}
@@ -145,6 +166,16 @@ function AnalyzeContent() {
         <div className="py-8">
           <AgentPipeline status={status} workflowState={workflowState} currentAgentName={currentAgentName} />
         </div>
+
+        {/* Negotiation Theater (Chat) */}
+        {status !== "pending" && (
+          <div className="w-full max-w-5xl mx-auto">
+            <NegotiationChat 
+              messages={workflowState?.negotiationMessages || []} 
+              status={status} 
+            />
+          </div>
+        )}
 
         {/* Results Section */}
         <AnimatePresence>
@@ -186,10 +217,20 @@ function AnalyzeContent() {
               {/* 3. Detailed Panels */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <PortfolioSnapshot data={workflowState.portfolio} />
-                <MarketAnalysisPanel data={workflowState.marketAnalysis} />
+                <MarketAnalysisPanel data={workflowState.deepMarketAnalysis || workflowState.marketAnalysis} />
               </div>
 
-              {/* 4. Full Trace Accordion */}
+              {/* 4. Deep Dive Data */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {workflowState.deepMarketAnalysis?.technicalIndicators && (
+                  <TechnicalIndicatorsCard indicators={workflowState.deepMarketAnalysis.technicalIndicators} />
+                )}
+                {workflowState.deepMarketAnalysis?.newsHeadlines && (
+                  <NewsHeadlinesPanel headlines={workflowState.deepMarketAnalysis.newsHeadlines} />
+                )}
+              </div>
+
+              {/* 5. Full Trace Accordion */}
               <WorkflowSummary state={workflowState} />
 
             </motion.div>

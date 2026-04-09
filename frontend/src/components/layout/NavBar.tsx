@@ -61,12 +61,12 @@ export function NavBar() {
           
           <div className="h-4 w-[1px] bg-white/10 hidden md:block" />
           
-          <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground hidden sm:flex">
              <span>NETWORK: SEPOLIA</span>
              <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_#a855f7]" />
           </div>
           
-          <div className="h-4 w-[1px] bg-white/10" />
+          <div className="h-4 w-[1px] bg-white/10 hidden sm:block" />
 
           <WalletConnect />
         </div>

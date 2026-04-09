@@ -1,25 +1,22 @@
 import { config } from '../utils/config';
 import { WorkflowState, PortfolioData } from '../types';
-import { getEthBalance, getErc20Balance } from '../tools/balance-reader';
-import { getTokenPrice } from '../tools/price-fetcher';
 import { getUniswapPoolData } from '../tools/pool-data';
+import { getMultiTokenPortfolio, calculateDiversificationScore, getTopTokens } from '../tools/multi-token-portfolio';
 
 // ============================================================================
-// DATA COLLECTION AGENT
+// DATA COLLECTION AGENT (Multi-Token)
 // ============================================================================
 
 /**
  * Data Collection Agent
  *
- * Purpose: Gather all current factual data about the user's portfolio
+ * Purpose: Gather complete portfolio data for ALL 25 supported tokens
  *
  * Tools Used:
- * - getEthBalance: Fetch ETH balance from blockchain
- * - getErc20Balance: Fetch USDC balance from blockchain
- * - getTokenPrice: Get current USD prices from CoinGecko
- * - getUniswapPoolData: Get pool statistics from The Graph
+ * - getMultiTokenPortfolio: Fetch all token balances + prices in one call
+ * - getUniswapPoolData: Get Uniswap V3 pool statistics
  *
- * Output: Complete portfolio snapshot with balances, prices, and pool data
+ * Output: Complete portfolio snapshot with all token holdings and pool data
  */
 export async function runDataCollector(state: WorkflowState): Promise<WorkflowState> {
   console.log('\n📊 ========================================');
@@ -30,86 +27,101 @@ export async function runDataCollector(state: WorkflowState): Promise<WorkflowSt
     const { walletAddress } = state;
 
     // ========================================================================
-    // STEP 1: Fetch all data using tools directly
+    // STEP 1: Fetch multi-token portfolio (all 25 tokens)
     // ========================================================================
 
-    console.log('🔍 Fetching portfolio data...\n');
+    console.log('🔍 Fetching multi-token portfolio data...\n');
 
-    // Fetch balances in parallel
-    const [ethBalance, usdcBalance] = await Promise.all([
-      getEthBalance(walletAddress),
-      getErc20Balance(walletAddress, config.usdcAddress)
+    const [multiPortfolio, poolData] = await Promise.all([
+      getMultiTokenPortfolio(walletAddress),
+      getUniswapPoolData(config.uniswapPoolAddress)
     ]);
 
-    // Fetch prices in parallel
-    const [ethPrice, usdcPrice] = await Promise.all([
-      getTokenPrice(config.tokenSymbols.ETH),
-      getTokenPrice(config.tokenSymbols.USDC)
-    ]);
-
-    // Fetch pool data
-    const poolData = await getUniswapPoolData(config.uniswapPoolAddress);
-
     // ========================================================================
-    // STEP 2: Calculate portfolio metrics
+    // STEP 2: Build holdings Record<string, TokenHolding>
     // ========================================================================
 
-    const ethValueUSD = ethBalance * ethPrice;
-    const usdcValueUSD = usdcBalance * usdcPrice;
-    const totalValueUSD = ethValueUSD + usdcValueUSD;
+    const holdings: Record<string, { balance: number; priceUSD: number; valueUSD: number }> = {};
+    const allocationPercent: Record<string, number> = {};
 
-    // Calculate allocation percentages
-    const ethAllocationPercent = totalValueUSD > 0 ? (ethValueUSD / totalValueUSD) * 100 : 0;
-    const usdcAllocationPercent = totalValueUSD > 0 ? (usdcValueUSD / totalValueUSD) * 100 : 0;
+    for (const token of multiPortfolio.tokens) {
+      holdings[token.symbol] = {
+        balance: token.balance,
+        priceUSD: token.priceUSD,
+        valueUSD: token.valueUSD
+      };
+
+      allocationPercent[token.symbol] = multiPortfolio.totalValueUSD > 0
+        ? (token.valueUSD / multiPortfolio.totalValueUSD) * 100
+        : 0;
+    }
 
     // ========================================================================
-    // STEP 3: Construct portfolio data object
+    // STEP 3: Calculate top holdings and dominant token
+    // ========================================================================
+
+    const topTokensList = getTopTokens(multiPortfolio, 5);
+    const topHoldings = topTokensList.map(t => t.symbol);
+    const dominantToken = topHoldings.length > 0 ? topHoldings[0] : 'ETH';
+
+    // ========================================================================
+    // STEP 4: Calculate diversification score
+    // ========================================================================
+
+    const diversificationScore = calculateDiversificationScore(multiPortfolio);
+
+    // ========================================================================
+    // STEP 5: Calculate pool fee APR
+    // ========================================================================
+
+    const feeAPR = poolData.liquidity > 0
+      ? (poolData.feesUSD / poolData.liquidity) * 365
+      : 0;
+
+    // ========================================================================
+    // STEP 6: Build PortfolioData object
     // ========================================================================
 
     const portfolio: PortfolioData = {
-      holdings: {
-        ETH: {
-          balance: ethBalance,
-          priceUSD: ethPrice,
-          valueUSD: ethValueUSD
-        },
-        USDC: {
-          balance: usdcBalance,
-          priceUSD: usdcPrice,
-          valueUSD: usdcValueUSD
-        }
-      },
-      totalValueUSD,
-      allocationPercent: {
-        ETH: ethAllocationPercent,
-        USDC: usdcAllocationPercent
-      },
+      holdings,
+      topHoldings,
+      totalValueUSD: multiPortfolio.totalValueUSD,
+      allocationPercent,
+      dominantToken,
       uniswapPool: {
         address: config.uniswapPoolAddress,
         liquidity: poolData.liquidity,
         volume24h: poolData.volumeUSD,
-        feeAPR: (poolData.feesUSD / poolData.liquidity) * 365 // Calculate APR
-      }
+        feeAPR
+      },
+      diversificationScore
     };
 
     // ========================================================================
-    // STEP 4: Log results
+    // STEP 7: Log results
     // ========================================================================
 
     console.log('\n✅ PORTFOLIO DATA COLLECTED:');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`💰 Total Portfolio Value: $${totalValueUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    console.log('\n📊 Holdings:');
-    console.log(`   ETH:  ${ethBalance.toFixed(4)} ETH @ $${ethPrice.toFixed(2)} = $${ethValueUSD.toFixed(2)} (${ethAllocationPercent.toFixed(1)}%)`);
-    console.log(`   USDC: ${usdcBalance.toFixed(2)} USDC @ $${usdcPrice.toFixed(2)} = $${usdcValueUSD.toFixed(2)} (${usdcAllocationPercent.toFixed(1)}%)`);
+    console.log(`💰 Total Portfolio Value: $${multiPortfolio.totalValueUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+    console.log(`📊 Diversification Score: ${(diversificationScore * 100).toFixed(0)}/100`);
+    console.log(`🏆 Dominant Token: ${dominantToken}`);
+
+    if (topHoldings.length > 0) {
+      console.log('\n📊 Top Holdings:');
+      topTokensList.forEach(token => {
+        console.log(`   ${token.symbol}: ${token.balance.toFixed(4)} @ $${token.priceUSD.toFixed(2)} = $${token.valueUSD.toFixed(2)} (${allocationPercent[token.symbol]?.toFixed(1) || 0}%)`);
+      });
+    }
+
     console.log('\n🏊 Uniswap ETH-USDC Pool:');
     console.log(`   TVL: $${poolData.liquidity.toLocaleString()}`);
     console.log(`   24h Volume: $${poolData.volumeUSD.toLocaleString()}`);
-    console.log(`   Fee APR: ${(portfolio.uniswapPool.feeAPR * 100).toFixed(2)}%`);
+    console.log(`   Fee APR: ${(feeAPR * 100).toFixed(2)}%`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     // ========================================================================
-    // STEP 5: Return updated state
+    // STEP 8: Return updated state
     // ========================================================================
 
     return {

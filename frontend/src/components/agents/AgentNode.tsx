@@ -17,9 +17,9 @@ interface AgentNodeProps {
 }
 
 export function AgentNode({ definition, status, workflowState, delay = 0 }: AgentNodeProps) {
-  const { name, icon, color, message } = definition;
+  const { name, icon: Icon, color, message } = definition;
 
-  const borderColor = {
+  const borderColorMap = {
     idle: "border-white/5",
     active: `border-neon-${color}/50 shadow-[0_0_15px_rgba(var(--neon-${color}-rgb),0.3)]`,
     complete: `border-neon-${color} shadow-[0_0_10px_rgba(var(--neon-${color}-rgb),0.5)]`,
@@ -33,9 +33,9 @@ export function AgentNode({ definition, status, workflowState, delay = 0 }: Agen
       transition={{ delay: delay * 0.1, duration: 0.5 }}
       className={cn(
         "relative flex flex-col items-center p-6 rounded-xl border bg-black/40 backdrop-blur-md w-full md:w-64 transition-all duration-500",
-        status === "active" ? "scale-105 z-10 bg-black/60" : "",
-        status === "idle" ? "opacity-50 grayscale" : "",
-        borderColor[status]
+        status === "active" ? "scale-105 z-10 bg-black/60 shadow-xl" : "shadow-md",
+        status === "idle" ? "opacity-50 grayscale" : "opacity-100",
+        borderColorMap[status as keyof typeof borderColorMap] || "border-white/5"
       )}
     >
       {/* Status Badge */}
@@ -49,7 +49,7 @@ export function AgentNode({ definition, status, workflowState, delay = 0 }: Agen
       </div>
 
       {/* Avatar */}
-      <AgentAvatar status={status} icon={icon} color={color} className="mb-4" />
+      <AgentAvatar status={status} icon={Icon} color={color} className="mb-4" />
 
       {/* Name */}
       <h3 className={cn("font-orbitron font-bold text-lg text-center mb-2 transition-colors", 
@@ -59,13 +59,13 @@ export function AgentNode({ definition, status, workflowState, delay = 0 }: Agen
       </h3>
 
       {/* Dynamic Message / Typing Text */}
-      <div className="h-12 flex items-center justify-center text-center w-full">
+      <div className="h-12 flex items-center justify-center text-center w-full px-2">
         {status === "active" ? (
-          <TypingText text={message} className="text-neon-cyan" speed={30} />
+          <TypingText text={message} className={`text-neon-${color}`} speed={30} />
         ) : status === "complete" ? (
-          <span className="text-zinc-400 text-xs italic">Task completed successfully.</span>
+          <span className="text-neon-green/80 text-xs italic font-mono">Task completed successfully.</span>
         ) : (
-          <span className="text-zinc-600 text-xs">Waiting for initialization...</span>
+          <span className="text-zinc-600 text-xs font-mono">Waiting for initialization...</span>
         )}
       </div>
 

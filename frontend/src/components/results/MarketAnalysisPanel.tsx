@@ -1,19 +1,24 @@
 "use client";
 
 import { GlowContainer } from "@/components/layout/GlowContainer";
-import { MarketAnalysis } from "@/lib/types";
+import { DeepMarketAnalysis, MarketAnalysis } from "@/lib/types";
 import { formatPercent } from "@/lib/utils";
-import { TrendingUp, AlertTriangle, CloudRain, Sun } from "lucide-react";
+import { TrendingUp, CloudRain, Sun, Activity, HeartPulse } from "lucide-react";
 import { NeonBadge } from "@/components/shared/NeonBadge";
 
 interface MarketAnalysisPanelProps {
-  data: MarketAnalysis | null;
+  data: MarketAnalysis | DeepMarketAnalysis | null;
 }
 
 export function MarketAnalysisPanel({ data }: MarketAnalysisPanelProps) {
   if (!data) return null;
 
+  // Type guard or safe access for DeepMarketAnalysis properties
+  const deepData = data as DeepMarketAnalysis;
   const { ethTrend, volatility, marketCondition, reasoning } = data;
+  const fearGreedIndex = deepData.fearGreedIndex ?? 50;
+  const fearGreedLabel = deepData.fearGreedLabel ?? "Neutral";
+  const sentimentScore = deepData.sentimentScore ?? 0.5;
 
   const trendIcon = ethTrend === 'bullish' ? (
     <Sun className="w-5 h-5 text-neon-green" />
@@ -25,12 +30,21 @@ export function MarketAnalysisPanel({ data }: MarketAnalysisPanelProps) {
 
   const volatilityColor = volatility > 50 ? "red" : volatility > 20 ? "orange" : "green";
 
+  // Fear & Greed Color
+  const getFearGreedColor = (val: number) => {
+    if (val <= 25) return "text-neon-orange"; // Extreme Fear
+    if (val <= 45) return "text-yellow-500";  // Fear
+    if (val <= 55) return "text-zinc-400";    // Neutral
+    if (val <= 75) return "text-neon-green";  // Greed
+    return "text-neon-cyan";                  // Extreme Greed
+  };
+
   return (
     <GlowContainer glowColor="blue" intensity="medium" className="h-full flex flex-col justify-between p-6">
       
       {/* Header */}
       <div className="flex items-center gap-2 mb-6 border-b border-neon-blue/20 pb-4">
-        <TrendingUp className="w-6 h-6 text-neon-blue" />
+        <Activity className="w-6 h-6 text-neon-blue" />
         <h3 className="font-orbitron text-xl text-white tracking-wider">Market Intelligence</h3>
       </div>
 
@@ -56,6 +70,29 @@ export function MarketAnalysisPanel({ data }: MarketAnalysisPanelProps) {
               <NeonBadge label={formatPercent(volatility)} color={volatilityColor as any} size="lg" />
             </div>
           </div>
+
+          {/* Fear & Greed Section */}
+          <div className="space-y-2">
+            <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest block">Sentiment</span>
+            <div className="bg-white/5 p-3 rounded-lg border border-white/10 flex flex-col">
+              <span className={`text-xl font-orbitron font-bold ${getFearGreedColor(fearGreedIndex)}`}>
+                {fearGreedIndex}/100
+              </span>
+              <span className="text-[10px] text-zinc-400 font-mono uppercase">{fearGreedLabel}</span>
+            </div>
+          </div>
+
+          {/* AI Sentiment Score */}
+          <div className="space-y-2">
+            <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest block">AI Sentiment</span>
+             <div className="bg-white/5 p-3 rounded-lg border border-white/10 flex items-center gap-2">
+               <HeartPulse className={`w-5 h-5 ${sentimentScore > 0.6 ? 'text-neon-green' : sentimentScore < 0.4 ? 'text-neon-orange' : 'text-zinc-400'}`} />
+               <span className="text-lg font-mono font-bold text-white">
+                 {(sentimentScore * 10).toFixed(1)}/10
+               </span>
+             </div>
+          </div>
+
         </div>
 
         {/* Market Condition Badge */}

@@ -1,127 +1,142 @@
-import { WorkflowState, FinalRecommendation, StrategyProposal, AddLiquidityDetails } from '../types';
+import { WorkflowState, FinalRecommendation, StrategyProposal, AddLiquidityDetails, NegotiationMessage } from '../types';
+import { config } from '../utils/config';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 
 // ============================================================================
-// NASH NEGOTIATOR (DETERMINISTIC - NO LLM)
+// NASH NEGOTIATOR (Deterministic Nash + Gemini Explanation)
 // ============================================================================
 
 /**
  * Nash Bargaining Negotiator
  *
- * Purpose: Combine strategy proposal and risk validation using game theory
+ * Algorithm: Nash bargaining solution (deterministic math for the decision)
+ * Enhancement: Gemini LLM for writing the final explanation
  *
- * Algorithm: Nash bargaining solution
- * - Maximizes product of utilities: U_return * U_safety
- * - Deterministic decision rules (no LLM)
- * - Transparent mathematical formula
- *
- * Decision Rules:
- * 1. Both satisfied (high return + high safety) → Accept original strategy
- * 2. Too risky (low safety) → Use risk-adjusted strategy
- * 3. Moderate conflict → Blend strategies with 60/40 safety weighting
- *
- * Output: Final recommendation with confidence score
+ * Decision Rules (unchanged):
+ * 1. Both approved → Accept original strategy
+ * 2. Too risky → Use risk-adjusted strategy or hold
+ * 3. Moderate → Blend 60/40 safety weighting
  */
-export function nashNegotiator(state: WorkflowState): WorkflowState {
+export async function nashNegotiator(state: WorkflowState): Promise<WorkflowState> {
+  const totalRounds = state.negotiationRound || 1;
+
   console.log('\n🤝 ========================================');
-  console.log('🤝 NASH NEGOTIATOR (DETERMINISTIC)');
+  console.log(`🤝 NASH NEGOTIATOR (after ${totalRounds} round${totalRounds > 1 ? 's' : ''})`);
   console.log('🤝 ========================================\n');
 
   try {
-    // Validate required state
-    if (!state.strategyProposal) {
-      throw new Error('Strategy proposal required for negotiation');
-    }
-    if (!state.riskValidation) {
-      throw new Error('Risk validation required for negotiation');
-    }
+    if (!state.strategyProposal) throw new Error('Strategy proposal required');
+    if (!state.riskValidation) throw new Error('Risk validation required');
 
     const { strategyProposal, riskValidation } = state;
 
     // ========================================================================
-    // STEP 1: Calculate utilities
+    // STEP 1: Calculate utilities (Nash math — deterministic)
     // ========================================================================
 
-    // Return utility: normalized expected APY (0-1)
-    const returnUtility = Math.min(strategyProposal.expectedAPY / 0.30, 1); // Cap at 30% APY
-
-    // Safety utility: inverse of risk score (0-1)
+    const returnUtility = Math.min(strategyProposal.expectedAPY / 0.30, 1);
     const safetyUtility = 1 - riskValidation.riskScore;
 
     console.log('📊 Utility Calculations:');
-    console.log(`   Return Utility: ${(returnUtility * 100).toFixed(0)}/100`);
-    console.log(`   (Expected APY: ${(strategyProposal.expectedAPY * 100).toFixed(2)}%)`);
-    console.log(`   Safety Utility: ${(safetyUtility * 100).toFixed(0)}/100`);
-    console.log(`   (Risk Score: ${(riskValidation.riskScore * 100).toFixed(0)}/100)\n`);
+    console.log(`   Return Utility: ${(returnUtility * 100).toFixed(0)}/100 (APY: ${(strategyProposal.expectedAPY * 100).toFixed(2)}%)`);
+    console.log(`   Safety Utility: ${(safetyUtility * 100).toFixed(0)}/100 (Risk: ${(riskValidation.riskScore * 100).toFixed(0)}/100)\n`);
 
     // ========================================================================
-    // STEP 2: Apply Nash bargaining decision rules
+    // STEP 2: Apply Nash decision rules
     // ========================================================================
 
     let finalRecommendation: FinalRecommendation;
     let decisionReason: string;
 
-    // RULE 1: Both agents satisfied (high return AND high safety)
     if (riskValidation.approved && returnUtility > 0.10 && safetyUtility > 0.6) {
-      console.log('✅ Decision: ACCEPT ORIGINAL STRATEGY');
-      console.log('   Reason: Both return and safety utilities are high\n');
-
+      console.log('✅ Decision: ACCEPT ORIGINAL STRATEGY\n');
       finalRecommendation = {
         action: strategyProposal.action,
         details: strategyProposal.details,
         expectedAPY: strategyProposal.expectedAPY,
         maxRisk: riskValidation.estimatedMaxIL,
-        confidence: returnUtility * safetyUtility, // Nash product
-        explanation: combineReasoningBothApproved(strategyProposal, riskValidation)
+        confidence: returnUtility * safetyUtility,
+        explanation: '',
+        negotiationRounds: totalRounds
       };
+      decisionReason = 'Original strategy accepted — optimal balance of returns and safety';
 
-      decisionReason = 'Original strategy accepted - optimal balance of returns and safety';
-    }
-    // RULE 2: Too risky (low safety utility or not approved)
-    else if (!riskValidation.approved || safetyUtility < 0.4) {
-      console.log('⚠️  Decision: USE RISK-ADJUSTED STRATEGY');
-      console.log('   Reason: Safety concerns require adjustment\n');
+    } else if (!riskValidation.approved || safetyUtility < 0.4) {
+      console.log('⚠️  Decision: USE RISK-ADJUSTED STRATEGY\n');
 
       if (riskValidation.adjustedStrategy) {
         finalRecommendation = {
           action: riskValidation.adjustedStrategy.action,
           details: riskValidation.adjustedStrategy.details,
           expectedAPY: riskValidation.adjustedStrategy.expectedAPY,
-          maxRisk: riskValidation.estimatedMaxIL * 0.7, // Adjusted strategy has lower risk
+          maxRisk: riskValidation.estimatedMaxIL * 0.7,
           confidence: safetyUtility,
-          explanation: combineReasoningRiskAdjusted(riskValidation)
+          explanation: '',
+          negotiationRounds: totalRounds
         };
-
         decisionReason = 'Risk-adjusted strategy adopted for safety';
       } else {
-        // No adjusted strategy - default to hold
         finalRecommendation = {
           action: 'hold',
           details: null,
           expectedAPY: 0,
           maxRisk: 0,
           confidence: 0.5,
-          explanation: `Strategy rejected due to risk concerns. ${riskValidation.reasoning} Maintaining current portfolio allocation is the safest option.`
+          explanation: '',
+          negotiationRounds: totalRounds
         };
-
-        decisionReason = 'Hold strategy - original too risky, no safe adjustment available';
+        decisionReason = 'Hold — original too risky, no safe adjustment available';
       }
-    }
-    // RULE 3: Moderate conflict - blend strategies
-    else {
-      console.log('🔄 Decision: BLEND STRATEGIES');
-      console.log('   Reason: Moderate return/risk trade-off\n');
 
-      finalRecommendation = blendStrategies(
-        strategyProposal,
-        riskValidation.adjustedStrategy,
-        safetyUtility
-      );
-
-      decisionReason = 'Blended strategy - balanced compromise between return and safety';
+    } else {
+      console.log('🔄 Decision: BLEND STRATEGIES\n');
+      finalRecommendation = blendStrategies(strategyProposal, riskValidation.adjustedStrategy, safetyUtility);
+      finalRecommendation.negotiationRounds = totalRounds;
+      decisionReason = 'Blended — balanced compromise between return and safety';
     }
 
     // ========================================================================
-    // STEP 3: Log final decision
+    // STEP 3: Log final Nash message
+    // ========================================================================
+
+    const nashMessage: NegotiationMessage = {
+      round: totalRounds,
+      from: 'NashNegotiator',
+      type: 'final_decision',
+      content: `Nash Equilibrium reached after ${totalRounds} round${totalRounds > 1 ? 's' : ''}. Decision: ${decisionReason}.`,
+      keyPoints: [
+        `Action: ${finalRecommendation.action.replace('_', ' ').toUpperCase()}`,
+        `Expected APY: ${(finalRecommendation.expectedAPY * 100).toFixed(2)}%`,
+        `Confidence: ${(finalRecommendation.confidence * 100).toFixed(0)}%`,
+        `Rounds taken: ${totalRounds}`
+      ],
+      timestamp: new Date()
+    };
+
+    // ========================================================================
+    // STEP 4: Generate Gemini explanation
+    // ========================================================================
+
+    try {
+      const nashExplanation = await generateNashExplanation(
+        state,
+        finalRecommendation,
+        totalRounds,
+        decisionReason
+      );
+      finalRecommendation.explanation = nashExplanation;
+      finalRecommendation.nashExplanation = nashExplanation;
+      console.log('✅ Gemini explanation generated\n');
+    } catch (err) {
+      console.warn('⚠️  Gemini explanation failed:', (err as Error).message);
+      finalRecommendation.explanation = generateDeterministicExplanation(
+        finalRecommendation, state, totalRounds, decisionReason
+      );
+    }
+
+    // ========================================================================
+    // STEP 5: Log summary
     // ========================================================================
 
     console.log('✅ FINAL RECOMMENDATION:');
@@ -130,24 +145,19 @@ export function nashNegotiator(state: WorkflowState): WorkflowState {
     console.log(`📊 Expected APY: ${(finalRecommendation.expectedAPY * 100).toFixed(2)}%`);
     console.log(`🛡️  Max Risk (IL): ${finalRecommendation.maxRisk.toFixed(2)}%`);
     console.log(`💯 Confidence: ${(finalRecommendation.confidence * 100).toFixed(0)}%`);
-    console.log(`\n🤝 Negotiation Outcome: ${decisionReason}`);
-
-    if (finalRecommendation.action === 'add_liquidity' && finalRecommendation.details) {
-      const details = finalRecommendation.details as AddLiquidityDetails;
-      console.log(`\n💰 Position Details:`);
-      console.log(`   ${details.ethAmount.toFixed(4)} ETH + ${details.usdcAmount.toFixed(2)} USDC`);
-      console.log(`   Range: $${details.priceRangeLower.toFixed(2)} - $${details.priceRangeUpper.toFixed(2)}`);
-    }
-
+    console.log(`🔄 Negotiation Rounds: ${totalRounds}`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     // ========================================================================
-    // STEP 4: Return updated state with final recommendation
+    // STEP 6: Return final state
     // ========================================================================
+
+    const allMessages = [...(state.negotiationMessages || []), nashMessage];
 
     return {
       ...state,
-      finalRecommendation
+      finalRecommendation,
+      negotiationMessages: allMessages
     };
 
   } catch (error) {
@@ -157,86 +167,112 @@ export function nashNegotiator(state: WorkflowState): WorkflowState {
 }
 
 // ============================================================================
+// GEMINI EXPLANATION
+// ============================================================================
+
+async function generateNashExplanation(
+  state: WorkflowState,
+  decision: FinalRecommendation,
+  rounds: number,
+  decisionReason: string
+): Promise<string> {
+  const llm = new ChatGoogleGenerativeAI({
+    model: config.geminiModel,
+    apiKey: config.googleApiKey,
+    temperature: 0.5, // Slightly higher for more natural explanation
+  });
+
+  const messages = state.negotiationMessages || [];
+  const proposerMessages = messages.filter(m => m.from === 'StrategyProposer');
+  const validatorMessages = messages.filter(m => m.from === 'RiskValidator');
+
+  const conversationSummary = messages.slice(0, 6).map(m =>
+    `[Round ${m.round} - ${m.from}] ${m.type.toUpperCase()}: ${m.keyPoints.join(' | ')}`
+  ).join('\n');
+
+  const systemPrompt = `You are a neutral DeFi advisor summarizing a negotiation between a Strategy Proposer and Risk Validator. Write clearly and professionally for a retail DeFi user.`;
+
+  const userPrompt = `You mediated a ${rounds}-round negotiation to find the best DeFi strategy.
+
+NEGOTIATION SUMMARY:
+${conversationSummary}
+
+FINAL DECISION: ${decisionReason}
+- Action: ${decision.action.replace('_', ' ').toUpperCase()}
+- Expected APY: ${(decision.expectedAPY * 100).toFixed(2)}%
+- Max IL risk: ${decision.maxRisk.toFixed(2)}%
+- Confidence: ${(decision.confidence * 100).toFixed(0)}%
+
+Write a 3-paragraph final report:
+1. What was debated during negotiation (specific concerns raised)
+2. Why this final recommendation was chosen over alternatives
+3. What the user should do and what risks to monitor going forward
+
+Be direct and helpful. Use plain language.`;
+
+  const response = await llm.invoke([
+    new SystemMessage(systemPrompt),
+    new HumanMessage(userPrompt)
+  ]);
+
+  return typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
+}
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
-/**
- * Combine reasoning when both agents approve
- */
-function combineReasoningBothApproved(
-  strategy: StrategyProposal,
-  risk: any
-): string {
-  return `${strategy.reasoning}\n\nRisk Assessment: ${risk.reasoning}\n\nThis strategy offers an optimal balance between yield generation and risk management, making it suitable for execution.`;
-}
-
-/**
- * Combine reasoning when using risk-adjusted strategy
- */
-function combineReasoningRiskAdjusted(risk: any): string {
-  return `Risk-Adjusted Strategy: ${risk.reasoning}\n\nThe adjusted strategy provides a safer alternative that maintains yield objectives while staying within acceptable risk parameters.`;
-}
-
-/**
- * Blend two strategies with weighted average
- * Used when there's moderate conflict between return and safety
- */
 function blendStrategies(
   strategy1: StrategyProposal,
   strategy2: StrategyProposal | null,
   safetyWeight: number
 ): FinalRecommendation {
-  // If no adjusted strategy, prefer safety (hold or reduce original)
   if (!strategy2) {
     return {
       action: strategy1.action,
-      details: reduceStrategySize(strategy1.details, 0.7), // Reduce to 70%
+      details: reduceStrategySize(strategy1.details, 0.7),
       expectedAPY: strategy1.expectedAPY * 0.7,
-      maxRisk: strategy1.expectedAPY > 0 ? 8 : 0, // Conservative IL estimate
+      maxRisk: strategy1.expectedAPY > 0 ? 8 : 0,
       confidence: 0.6,
-      explanation: `Modified strategy with reduced position size for balanced risk-return profile. ${strategy1.reasoning}`
+      explanation: ''
     };
   }
 
-  // Blend two strategies - favor the safer one
   const returnWeight = 1 - safetyWeight;
-
-  // Weighted average of APY
-  const blendedAPY = (strategy1.expectedAPY * returnWeight) + (strategy2.expectedAPY * safetyWeight);
-
-  // Use safer strategy's details but with blended sizing
+  const blendedAPY = strategy1.expectedAPY * returnWeight + strategy2.expectedAPY * safetyWeight;
   const baseStrategy = safetyWeight > 0.5 ? strategy2 : strategy1;
 
   return {
     action: baseStrategy.action,
     details: baseStrategy.details,
     expectedAPY: blendedAPY,
-    maxRisk: Math.max(5, Math.min(10, blendedAPY * 50)), // Heuristic: higher APY = higher risk
+    maxRisk: Math.max(5, Math.min(10, blendedAPY * 50)),
     confidence: 0.7,
-    explanation: `Blended recommendation balancing ${(returnWeight * 100).toFixed(0)}% return optimization and ${(safetyWeight * 100).toFixed(0)}% risk management. ${baseStrategy.reasoning}`
+    explanation: ''
   };
 }
 
-/**
- * Reduce strategy position size by a factor
- */
 function reduceStrategySize(details: any, factor: number): any {
   if (!details) return null;
-
   if ('ethAmount' in details && 'usdcAmount' in details) {
-    // Add liquidity details
-    return {
-      ...details,
-      ethAmount: details.ethAmount * factor,
-      usdcAmount: details.usdcAmount * factor
-    };
+    return { ...details, ethAmount: details.ethAmount * factor, usdcAmount: details.usdcAmount * factor };
   } else if ('amount' in details) {
-    // Swap details
-    return {
-      ...details,
-      amount: details.amount * factor
-    };
+    return { ...details, amount: details.amount * factor };
   }
-
   return details;
+}
+
+function generateDeterministicExplanation(
+  decision: FinalRecommendation,
+  state: WorkflowState,
+  rounds: number,
+  reason: string
+): string {
+  const marketTrend = state.marketAnalysis?.ethTrend || 'neutral';
+  const fearGreed = state.marketAnalysis?.fearGreedIndex || 50;
+
+  return `After ${rounds} round${rounds > 1 ? 's' : ''} of negotiation, the agents reached consensus on a ${decision.action.replace('_', ' ')} strategy. ` +
+    `The Strategy Proposer and Risk Validator balanced expected returns (${(decision.expectedAPY * 100).toFixed(2)}% APY) against risk (max IL: ${decision.maxRisk.toFixed(2)}%). ` +
+    `Market conditions show ${marketTrend} trend with Fear & Greed at ${fearGreed}/100. ` +
+    `Outcome: ${reason}. Confidence: ${(decision.confidence * 100).toFixed(0)}%.`;
 }

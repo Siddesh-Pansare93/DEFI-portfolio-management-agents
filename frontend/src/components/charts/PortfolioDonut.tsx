@@ -41,7 +41,10 @@ export function PortfolioDonut({ data }: PortfolioDonutProps) {
             <Tooltip 
               contentStyle={{ backgroundColor: "#000", border: "1px solid #333", borderRadius: "8px" }}
               itemStyle={{ color: "#fff" }}
-              formatter={(value: number) => formatUSD(value)}
+              formatter={(value: any) => {
+                if (typeof value === 'number') return formatUSD(value);
+                return value;
+              }}
             />
           </PieChart>
         </ResponsiveContainer>

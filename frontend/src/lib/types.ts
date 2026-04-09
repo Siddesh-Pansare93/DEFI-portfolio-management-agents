@@ -15,15 +15,9 @@ export interface TokenHolding {
  * Complete portfolio data including holdings and pool information
  */
 export interface PortfolioData {
-  holdings: {
-    ETH: TokenHolding;
-    USDC: TokenHolding;
-  };
+  holdings: Record<string, TokenHolding>;
   totalValueUSD: number;
-  allocationPercent: {
-    ETH: number;          // Percentage of portfolio in ETH (0-100)
-    USDC: number;         // Percentage of portfolio in USDC (0-100)
-  };
+  allocationPercent: Record<string, number>;
   uniswapPool: {
     address: string;
     liquidity: number;    // Total value locked in USD
@@ -36,6 +30,24 @@ export interface PortfolioData {
 // MARKET ANALYSIS TYPES
 // ============================================================================
 
+export interface NewsItem {
+  title: string;
+  description: string;
+  source: string;
+  url: string;
+  publishedAt: string;
+  sentiment: 'bullish' | 'bearish' | 'neutral';
+}
+
+export interface TechnicalIndicators {
+  rsi: number;
+  macd: { value: number; signal: number; histogram: number };
+  bollingerBands: { upper: number; middle: number; lower: number; percentB: number };
+  ema7: number;
+  ema30: number;
+  signal: 'strong_buy' | 'buy' | 'hold' | 'sell' | 'strong_sell';
+}
+
 /**
  * Market trend analysis for ETH
  */
@@ -46,6 +58,22 @@ export interface MarketAnalysis {
   marketCondition: 'stable' | 'volatile' | 'uncertain';
   recommendation: 'increase_eth' | 'decrease_eth' | 'maintain';
   reasoning: string;              // 2-3 sentence explanation
+}
+
+// Extend existing MarketAnalysis for Phase 2
+export interface DeepMarketAnalysis extends MarketAnalysis {
+  fearGreedIndex: number;
+  fearGreedLabel: string;
+  sentimentScore: number;
+  newsHeadlines: NewsItem[];
+  technicalIndicators: TechnicalIndicators;
+  uniswapTVL: number;
+  uniswapTVLChange24h: number;
+  supportLevel: number;
+  resistanceLevel: number;
+  macroSignal: 'risk_on' | 'risk_off' | 'neutral';
+  analysisConfidence: number;
+  geminiReasoning: string;
 }
 
 // ============================================================================
@@ -124,17 +152,39 @@ export interface FinalRecommendation {
 // WORKFLOW STATE TYPES
 // ============================================================================
 
+export interface UserPreferences {
+  maxImpermanentLoss: number;
+  maxPositionSize: number;
+  riskAppetite: 'conservative' | 'moderate' | 'aggressive';
+  preferredActions: ('add_liquidity' | 'swap' | 'hold')[];
+}
+
+export interface NegotiationMessage {
+  round: number;
+  from: 'StrategyProposer' | 'RiskValidator' | 'NashNegotiator';
+  type: 'proposal' | 'critique' | 'refinement' | 'counter_proposal' |
+        'concession' | 'agreement' | 'escalation' | 'final_decision';
+  content: string;
+  proposalRef?: string;
+  keyPoints: string[];
+  timestamp: string;
+}
+
 /**
  * State object that flows through the LangGraph workflow
  * Each agent reads from and writes to this shared state
  */
 export interface WorkflowState {
   walletAddress: string;
+  userPreferences?: UserPreferences;
   portfolio: PortfolioData | null;
   marketAnalysis: MarketAnalysis | null;
+  deepMarketAnalysis?: DeepMarketAnalysis | null;
   strategyProposal: StrategyProposal | null;
   riskValidation: RiskValidation | null;
   finalRecommendation: FinalRecommendation | null;
+  negotiationRound?: number;
+  negotiationMessages?: NegotiationMessage[];
 }
 
 // ============================================================================
@@ -188,6 +238,8 @@ export interface StatusResponse {
     finalRecommendation: FinalRecommendation;
     workflowState: WorkflowState;
   };
+  negotiationMessages?: NegotiationMessage[];
+  negotiationRound?: number;
   completedTime?: string;         // ISO 8601 timestamp
   error?: string;
 }
@@ -197,12 +249,18 @@ export interface StatusResponse {
  */
 export interface PortfolioResponse {
   walletAddress: string;
-  holdings: {
-    ETH: TokenHolding;
-    USDC: TokenHolding;
-  };
+  holdings: Record<string, TokenHolding>;
   totalValueUSD: number;
   fetchedAt: string;              // ISO 8601 timestamp
+}
+
+export interface MarketOverviewResponse {
+  fearGreedIndex: number;
+  fearGreedLabel: string;
+  ethPrice: number;
+  uniswapTVL: number;
+  topTokenPrices: Record<string, number>;
+  timestamp: string;
 }
 
 /**
@@ -228,4 +286,5 @@ export interface LogRecommendationResponse {
  */
 export interface AnalyzeRequest {
   walletAddress: string;
+  preferences?: Partial<UserPreferences>;
 }

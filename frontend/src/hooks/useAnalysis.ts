@@ -37,7 +37,7 @@ export function useAnalysis() {
     // Backend Polling
     pollIntervalRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`http://localhost:3001/api/status/${id}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/status/${id}`);
         if (!res.ok) throw new Error("Status check failed");
         
         const data = await res.json();
@@ -73,8 +73,14 @@ export function useAnalysis() {
         } else {
           // Update partial state if available
           const partialState = data.workflowState || data.result?.workflowState;
-          if (partialState) {
-            setWorkflowState(partialState);
+          const messages = data.negotiationMessages || partialState?.negotiationMessages;
+          
+          if (partialState || messages) {
+            setWorkflowState(prev => ({
+              ...(prev || {} as WorkflowState),
+              ...(partialState || {}),
+              negotiationMessages: messages || prev?.negotiationMessages
+            }));
           }
         }
       } catch (err) {
