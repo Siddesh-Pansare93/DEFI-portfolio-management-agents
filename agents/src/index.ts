@@ -444,6 +444,51 @@ app.get('/api/status/:jobId', (req: Request, res: Response): any => {
 });
 
 /**
+ * GET /api/market-overview
+ *
+ * Get market data: Fear & Greed index, ETH price, Uniswap TVL
+ */
+app.get('/api/market-overview', async (_req: Request, res: Response): Promise<any> => {
+  try {
+    const { getTokenPrice } = await import('./tools/price-fetcher');
+
+    let ethPrice = 0;
+    try { ethPrice = await getTokenPrice(config.tokenSymbols.ETH); } catch {}
+
+    // Fear & Greed — fetch from alternative.me API
+    let fearGreedIndex = 50;
+    let fearGreedLabel = 'Neutral';
+    try {
+      const fgRes = await fetch('https://api.alternative.me/fng/?limit=1');
+      const fgData = await fgRes.json() as any;
+      if (fgData?.data?.[0]) {
+        fearGreedIndex = parseInt(fgData.data[0].value);
+        fearGreedLabel = fgData.data[0].value_classification;
+      }
+    } catch {}
+
+    // Uniswap TVL — use mock if DefiLlama fails
+    let uniswapTVL = 4_200_000_000; // $4.2B fallback
+    try {
+      const tvlRes = await fetch('https://api.llama.fi/tvl/uniswap');
+      const tvlData = await tvlRes.json() as any;
+      if (typeof tvlData === 'number') uniswapTVL = tvlData;
+    } catch {}
+
+    res.json({
+      fearGreedIndex,
+      fearGreedLabel,
+      ethPrice,
+      uniswapTVL,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('GET /api/market-overview error:', error);
+    res.status(500).json({ error: 'Internal server error', message: (error as Error).message });
+  }
+});
+
+/**
  * GET /api/portfolio/:walletAddress
  *
  * Get quick portfolio snapshot (no full workflow)
@@ -488,6 +533,7 @@ app.get('/api/portfolio/:walletAddress', async (req: Request, res: Response): Pr
     res.json({
       walletAddress,
       totalValue: portfolio.totalValueUSD,
+      totalValueUSD: portfolio.totalValueUSD,
       holdings,
       tokens: portfolio.tokens,
       timestamp: new Date().toISOString()

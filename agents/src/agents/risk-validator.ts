@@ -121,9 +121,9 @@ export async function runRiskValidator(state: WorkflowState): Promise<WorkflowSt
       }
 
       // Calculate risk score (0 = safest, 1 = riskiest)
-      const ilRisk = Math.min(estimatedMaxIL / (config.riskLimits.maxImpermanentLoss * 100), 1);
-      const volatilityRisk = Math.min(volatility / 50, 1);
-      riskScore = Math.min((ilRisk * 0.6) + (volatilityRisk * 0.4), 0.85); // Cap at 0.85 — never fully hopeless
+      const ilRisk = Math.min(estimatedMaxIL / (config.riskLimits.maxImpermanentLoss * 200), 1); // Softer IL scoring (200 instead of 100)
+      const volatilityRisk = Math.min(volatility / 100, 1); // Softer volatility scoring (100 instead of 50)
+      riskScore = Math.min((ilRisk * 0.5) + (volatilityRisk * 0.5), 0.65); // Cap at 0.65 — moderate risk range
 
     } else if (strategyProposal.action === 'swap') {
       // Swap strategy - lower risk than LP

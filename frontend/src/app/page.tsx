@@ -6,7 +6,7 @@ import { NavBar } from "@/components/layout/NavBar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, ArrowRight, Brain, Zap, Shield, Sparkles, Activity } from "lucide-react";
-import { startAnalysis } from "@/lib/api";
+// Dashboard redirect — analysis starts from dashboard, not landing page
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -267,13 +267,8 @@ export default function Home() {
       return;
     }
     setIsLoading(true);
-    try {
-      const data = await startAnalysis(address);
-      router.push(`/analyze?wallet=${address}&job=${data.jobId}`);
-    } catch {
-      setError("Failed to start analysis. Is the backend running?");
-      setIsLoading(false);
-    }
+    // Navigate to dashboard — analysis starts from there
+    router.push(`/dashboard?wallet=${address}`);
   };
 
   return (

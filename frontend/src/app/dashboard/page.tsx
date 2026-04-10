@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useAccount } from "wagmi";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Loader2 as Spinner } from "lucide-react";
 import {
   getMarketOverview,
   getPortfolio,
@@ -50,9 +51,15 @@ const fadeUp = {
 // Main Component
 // ---------------------------------------------------------------------------
 
-export default function DashboardPage() {
-  const { address, isConnected } = useAccount();
+function DashboardContent() {
+  const { address: wagmiAddress, isConnected: wagmiConnected } = useAccount();
+  const searchParams = useSearchParams();
   const router = useRouter();
+
+  // Support both MetaMask connection AND URL param wallet (from landing page demo)
+  const urlWallet = searchParams.get("wallet");
+  const address = wagmiAddress || (urlWallet as `0x${string}` | undefined);
+  const isConnected = wagmiConnected || !!urlWallet;
 
   // Data state
   const [marketData, setMarketData] = useState<MarketOverviewResponse | null>(null);
@@ -475,5 +482,17 @@ export default function DashboardPage() {
         </motion.div>
       </div>
     </main>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-transparent">
+        <Spinner className="w-8 h-8 text-violet-400 animate-spin" />
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
   );
 }

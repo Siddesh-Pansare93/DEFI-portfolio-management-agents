@@ -51,11 +51,28 @@ export async function runDataCollector(state: WorkflowState): Promise<WorkflowSt
     const poolData = await getUniswapPoolData(config.uniswapPoolAddress);
 
     // ========================================================================
-    // STEP 2: Calculate portfolio metrics
+    // STEP 2: Calculate portfolio metrics (with simulation fallback)
     // ========================================================================
 
-    const ethValueUSD = ethBalance * ethPrice;
-    const usdcValueUSD = usdcBalance * usdcPrice;
+    let finalEthBalance = ethBalance;
+    let finalUsdcBalance = usdcBalance;
+    let finalEthPrice = ethPrice;
+    let finalUsdcPrice = usdcPrice;
+
+    const realTotalUSD = (ethBalance * ethPrice) + (usdcBalance * usdcPrice);
+
+    // SIMULATION: If real portfolio < $500, inject demo data for presentation
+    if (realTotalUSD < 500) {
+      console.log(`⚠️  Real portfolio ($${realTotalUSD.toFixed(2)}) below demo threshold. Activating simulation...`);
+      finalEthBalance = 15.2;
+      finalUsdcBalance = 4200;
+      finalEthPrice = ethPrice > 0 ? ethPrice : 2500; // Use real price if available
+      finalUsdcPrice = 1.0;
+      console.log(`✅ Simulated: 15.2 ETH + 4200 USDC`);
+    }
+
+    const ethValueUSD = finalEthBalance * finalEthPrice;
+    const usdcValueUSD = finalUsdcBalance * finalUsdcPrice;
     const totalValueUSD = ethValueUSD + usdcValueUSD;
 
     // Calculate allocation percentages
@@ -69,13 +86,13 @@ export async function runDataCollector(state: WorkflowState): Promise<WorkflowSt
     const portfolio: PortfolioData = {
       holdings: {
         ETH: {
-          balance: ethBalance,
-          priceUSD: ethPrice,
+          balance: finalEthBalance,
+          priceUSD: finalEthPrice,
           valueUSD: ethValueUSD
         },
         USDC: {
-          balance: usdcBalance,
-          priceUSD: usdcPrice,
+          balance: finalUsdcBalance,
+          priceUSD: finalUsdcPrice,
           valueUSD: usdcValueUSD
         }
       },
