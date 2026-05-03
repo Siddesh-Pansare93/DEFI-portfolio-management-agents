@@ -59,7 +59,7 @@ export async function getTokenPrice(tokenSymbol: string): Promise<number> {
 
     const response = await axios.get(`${config.coingeckoApiUrl}/simple/price`, {
       params,
-      timeout: 10000 // 10 second timeout
+      timeout: 20000 // 10 second timeout
     });
 
     const price = response.data[normalizedSymbol]?.usd;
@@ -166,7 +166,7 @@ export async function getMultipleTokenPrices(
 
     const response = await axios.get(`${config.coingeckoApiUrl}/simple/price`, {
       params,
-      timeout: 10000
+      timeout: 20000
     });
 
     const priceMap = new Map<string, number>();

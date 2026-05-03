@@ -13,6 +13,7 @@ import {
   BarChart3, Cpu, Globe, Radio, Flame, Target
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { JarvisButton } from "@/components/ui/jarvis-button";
 
 // ─── Simulated Data ──────────────────────────────────────────────────────────
 
@@ -423,25 +424,12 @@ function DashboardContent() {
               </div>
             </div>
 
-            {/* START ANALYSIS BUTTON */}
-            <button
+            {/* START ANALYSIS — Jarvis Brain Assembly Button */}
+            <JarvisButton
               onClick={handleStartAnalysis}
-              disabled={isStarting}
-              className="w-full py-4 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold flex items-center justify-center gap-2 transition-all shadow-[0_0_30px_rgba(139,92,246,0.3)] hover:shadow-[0_0_40px_rgba(139,92,246,0.5)] active:scale-[0.98] disabled:opacity-50"
-            >
-              {isStarting ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Deploying Agents...
-                </>
-              ) : (
-                <>
-                  <Brain className="w-5 h-5" />
-                  Start AI Analysis
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
+              isLoading={isStarting}
+              disabled={!address}
+            />
           </div>
         </div>
       </div>

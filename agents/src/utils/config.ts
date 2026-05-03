@@ -88,7 +88,7 @@ export const config = {
   },
 
   // ============== Workflow Settings ==============
-  workflowTimeout: 120000,        // 2 minutes (in milliseconds)
+  workflowTimeout: 300000,        // 5 minutes (includes deliberate delays for demo)
   jobRetentionTime: 1800000,      // 30 minutes (in milliseconds)
 
   // ============== API Settings ==============

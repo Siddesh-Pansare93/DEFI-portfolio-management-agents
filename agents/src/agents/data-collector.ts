@@ -35,20 +35,38 @@ export async function runDataCollector(state: WorkflowState): Promise<WorkflowSt
 
     console.log('🔍 Fetching portfolio data...\n');
 
-    // Fetch balances in parallel
-    const [ethBalance, usdcBalance] = await Promise.all([
-      getEthBalance(walletAddress),
-      getErc20Balance(walletAddress, config.usdcAddress)
-    ]);
+    // Fetch balances (with fallback)
+    let ethBalance = 0, usdcBalance = 0;
+    try {
+      [ethBalance, usdcBalance] = await Promise.all([
+        getEthBalance(walletAddress),
+        getErc20Balance(walletAddress, config.usdcAddress)
+      ]);
+    } catch (err) {
+      console.log('⚠️  Balance fetch failed, using defaults:', (err as Error).message);
+    }
 
-    // Fetch prices in parallel
-    const [ethPrice, usdcPrice] = await Promise.all([
-      getTokenPrice(config.tokenSymbols.ETH),
-      getTokenPrice(config.tokenSymbols.USDC)
-    ]);
+    // Fetch prices (with fallback)
+    let ethPrice = 2500, usdcPrice = 1.0;
+    try {
+      const [ep, up] = await Promise.all([
+        getTokenPrice(config.tokenSymbols.ETH),
+        getTokenPrice(config.tokenSymbols.USDC)
+      ]);
+      ethPrice = ep;
+      usdcPrice = up;
+    } catch (err) {
+      console.log('⚠️  Price fetch failed, using fallback prices (ETH=$2500, USDC=$1):', (err as Error).message);
+    }
 
-    // Fetch pool data
-    const poolData = await getUniswapPoolData(config.uniswapPoolAddress);
+    // Fetch pool data (with fallback)
+    let poolData;
+    try {
+      poolData = await getUniswapPoolData(config.uniswapPoolAddress);
+    } catch (err) {
+      console.log('⚠️  Pool data fetch failed, using mock:', (err as Error).message);
+      poolData = { liquidity: 1500000, volumeUSD: 125000, feesUSD: 375, address: config.uniswapPoolAddress, token0Price: ethPrice, token1Price: 1 / ethPrice };
+    }
 
     // ========================================================================
     // STEP 2: Calculate portfolio metrics (with simulation fallback)
